@@ -53,4 +53,10 @@ public class Member {
         this.mainPosition = mainPosition;
         this.subPositions = subPositions != null ? subPositions : new HashSet<>();
     }
+
+    public void update(String name, Position mainPosition, Set<Position> subPositions) {
+        this.name = name;
+        this.mainPosition = mainPosition;
+        this.subPositions = subPositions != null ? subPositions : new HashSet<>();
+    }
 }
