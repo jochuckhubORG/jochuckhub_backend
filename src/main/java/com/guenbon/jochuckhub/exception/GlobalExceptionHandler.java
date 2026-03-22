@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.guenbon.jochuckhub.exception.ForbiddenException;
 import com.guenbon.jochuckhub.exception.MemberNotFoundException;
+import com.guenbon.jochuckhub.exception.TeamNotFoundException;
 
 import java.util.stream.Collectors;
 
@@ -28,6 +29,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMemberNotFound(MemberNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse("MEMBER_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(TeamNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTeamNotFound(TeamNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("TEAM_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(ForbiddenException.class)

@@ -30,10 +30,6 @@ public class Member {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Role role;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private Position mainPosition;
 
     @NotAudited
@@ -44,12 +40,11 @@ public class Member {
     private Set<Position> subPositions = new HashSet<>();
 
     @Builder
-    public Member(String username, String name, String password, Role role,
+    public Member(String username, String name, String password,
                   Position mainPosition, Set<Position> subPositions) {
         this.username = username;
         this.name = name;
         this.password = password;
-        this.role = role;
         this.mainPosition = mainPosition;
         this.subPositions = subPositions != null ? subPositions : new HashSet<>();
     }

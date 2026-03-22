@@ -1,7 +1,6 @@
 package com.guenbon.jochuckhub.dto.request;
 
 import com.guenbon.jochuckhub.entity.Position;
-import com.guenbon.jochuckhub.entity.Role;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -23,9 +22,6 @@ public class SignUpRequest {
 
     @NotBlank(message = "이름을 입력해주세요.")
     private String name;
-
-    @NotNull(message = "역할을 선택해주세요.")
-    private Role role;
 
     @NotNull(message = "주 포지션을 선택해주세요.")
     private Position mainPosition;

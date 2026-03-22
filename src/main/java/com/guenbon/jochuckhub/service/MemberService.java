@@ -5,7 +5,6 @@ import com.guenbon.jochuckhub.dto.request.SignUpRequest;
 import com.guenbon.jochuckhub.dto.request.UpdateMemberRequest;
 import com.guenbon.jochuckhub.dto.response.MemberResponse;
 import com.guenbon.jochuckhub.entity.Member;
-import com.guenbon.jochuckhub.entity.Role;
 import com.guenbon.jochuckhub.exception.ForbiddenException;
 import com.guenbon.jochuckhub.exception.MemberNotFoundException;
 import com.guenbon.jochuckhub.repository.MemberRepository;
@@ -26,20 +25,12 @@ public class MemberService {
 
     @Transactional
     public MemberResponse updateMember(Long targetId, UpdateMemberRequest request, CustomUserDetails requester) {
+        if (!requester.getMemberId().equals(targetId)) {
+            throw new ForbiddenException("자신의 정보만 수정할 수 있습니다.");
+        }
+
         Member target = memberRepository.findById(targetId)
                 .orElseThrow(MemberNotFoundException::new);
-
-        boolean isSelf = requester.getMemberId().equals(targetId);
-        boolean isManager = requester.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_MANAGER"));
-
-        if (isSelf) {
-            // 자기 자신은 누구나 수정 가능
-        } else if (isManager && target.getRole() == Role.PLAYER) {
-            // 매니저는 일반 회원(PLAYER) 수정 가능
-        } else {
-            throw new ForbiddenException("해당 회원의 정보를 수정할 권한이 없습니다.");
-        }
 
         if (request.getSubPositions().contains(request.getMainPosition())) {
             throw new IllegalArgumentException("주 포지션과 서브 포지션은 중복될 수 없습니다.");
@@ -75,7 +66,6 @@ public class MemberService {
                 .username(request.getUsername())
                 .name(request.getName())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(request.getRole())
                 .mainPosition(request.getMainPosition())
                 .subPositions(request.getSubPositions())
                 .build();
