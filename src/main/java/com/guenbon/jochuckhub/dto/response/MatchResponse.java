@@ -14,6 +14,7 @@ public class MatchResponse {
     private final LocalDateTime matchDate;
     private final String location;
     private final String createdBy;
+    private final LocalDateTime voteDeadline;
 
     public MatchResponse(Match match) {
         this.id = match.getId();
@@ -23,6 +24,7 @@ public class MatchResponse {
         this.matchDate = match.getMatchDate();
         this.location = match.getLocation();
         this.createdBy = match.getCreatedBy().getName();
+        this.voteDeadline = match.getEffectiveVoteDeadline();
     }
 
     @Getter

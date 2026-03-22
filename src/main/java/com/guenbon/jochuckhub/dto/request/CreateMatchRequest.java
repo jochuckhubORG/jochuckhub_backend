@@ -20,4 +20,7 @@ public class CreateMatchRequest {
 
     @NotBlank(message = "경기 장소는 필수입니다.")
     private String location;
+
+    // 미입력 시 matchDate를 투표 마감 시점으로 사용
+    private LocalDateTime voteDeadline;
 }

@@ -36,12 +36,21 @@ public class Match {
     @JoinColumn(name = "created_by_id", nullable = false)
     private Member createdBy;
 
+    // null이면 matchDate를 투표 마감 시점으로 사용
+    @Column
+    private LocalDateTime voteDeadline;
+
     @Builder
-    public Match(Team homeTeam, Team opponentTeam, LocalDateTime matchDate, String location, Member createdBy) {
+    public Match(Team homeTeam, Team opponentTeam, LocalDateTime matchDate, String location, Member createdBy, LocalDateTime voteDeadline) {
         this.homeTeam = homeTeam;
         this.opponentTeam = opponentTeam;
         this.matchDate = matchDate;
         this.location = location;
         this.createdBy = createdBy;
+        this.voteDeadline = voteDeadline;
+    }
+
+    public LocalDateTime getEffectiveVoteDeadline() {
+        return voteDeadline != null ? voteDeadline : matchDate;
     }
 }

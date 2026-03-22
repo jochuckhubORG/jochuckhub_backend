@@ -53,6 +53,7 @@ public class MatchService {
                 .matchDate(request.getMatchDate())
                 .location(request.getLocation())
                 .createdBy(creator)
+                .voteDeadline(request.getVoteDeadline())
                 .build());
 
         return new MatchResponse(match);
