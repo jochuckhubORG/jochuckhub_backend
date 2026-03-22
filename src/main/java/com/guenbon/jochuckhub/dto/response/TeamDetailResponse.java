@@ -12,6 +12,7 @@ public class TeamDetailResponse {
 
     private final Long id;
     private final String name;
+    private final boolean virtual;
     private final MemberResponse owner;
     private final List<MemberResponse> managers;
     private final int memberCount;
@@ -19,6 +20,7 @@ public class TeamDetailResponse {
     public TeamDetailResponse(Team team) {
         this.id = team.getId();
         this.name = team.getName();
+        this.virtual = team.isVirtual();
         this.memberCount = team.getTeamMembers().size();
 
         this.owner = team.getTeamMembers().stream()

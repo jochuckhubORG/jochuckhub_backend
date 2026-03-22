@@ -2,6 +2,7 @@ package com.guenbon.jochuckhub.service;
 
 import com.guenbon.jochuckhub.dto.CustomUserDetails;
 import com.guenbon.jochuckhub.dto.request.CreateTeamRequest;
+import com.guenbon.jochuckhub.dto.request.CreateVirtualTeamRequest;
 import com.guenbon.jochuckhub.dto.request.UpdateTeamRequest;
 import com.guenbon.jochuckhub.dto.response.TeamDetailResponse;
 import com.guenbon.jochuckhub.dto.response.TeamSummaryResponse;
@@ -32,7 +33,7 @@ public class TeamService {
 
     @Transactional
     public TeamDetailResponse createTeam(CreateTeamRequest request, CustomUserDetails requester) {
-        if (teamRepository.existsByName(request.getName())) {
+        if (teamRepository.existsByNameAndVirtualFalse(request.getName())) {
             throw new IllegalArgumentException("이미 사용 중인 팀 이름입니다.");
         }
 
@@ -41,6 +42,7 @@ public class TeamService {
 
         Team team = teamRepository.save(Team.builder()
                 .name(request.getName())
+                .virtual(false)
                 .build());
 
         teamMemberRepository.save(TeamMember.builder()
@@ -60,6 +62,37 @@ public class TeamService {
                 .toList();
     }
 
+    /**
+     * 팀 이름으로 검색: 실제 팀 전체 + myTeamId가 만든 가상 팀
+     */
+    public List<TeamSummaryResponse> searchTeams(String name, Long myTeamId) {
+        return teamRepository.searchByNameForTeam(name, myTeamId).stream()
+                .map(TeamSummaryResponse::new)
+                .toList();
+    }
+
+    @Transactional
+    public TeamSummaryResponse createVirtualTeam(CreateVirtualTeamRequest request, CustomUserDetails requester) {
+        Long myTeamId = request.getMyTeamId();
+
+        verifyOwnerOrManager(myTeamId, requester.getMemberId());
+
+        if (teamRepository.existsByNameAndVirtualFalse(request.getName())) {
+            throw new IllegalArgumentException("이미 실제 팀으로 등록된 이름입니다. 해당 팀을 상대로 선택하세요.");
+        }
+        if (teamRepository.existsByNameAndVirtualTrueAndCreatedByTeamId(request.getName(), myTeamId)) {
+            throw new IllegalArgumentException("이미 등록한 가상 팀 이름입니다.");
+        }
+
+        Team virtualTeam = teamRepository.save(Team.builder()
+                .name(request.getName())
+                .virtual(true)
+                .createdByTeamId(myTeamId)
+                .build());
+
+        return new TeamSummaryResponse(virtualTeam);
+    }
+
     public TeamDetailResponse getTeam(Long teamId) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(TeamNotFoundException::new);
@@ -73,7 +106,7 @@ public class TeamService {
 
         verifyOwner(teamId, requester.getMemberId());
 
-        if (!team.getName().equals(request.getName()) && teamRepository.existsByName(request.getName())) {
+        if (!team.getName().equals(request.getName()) && teamRepository.existsByNameAndVirtualFalse(request.getName())) {
             throw new IllegalArgumentException("이미 사용 중인 팀 이름입니다.");
         }
 
@@ -97,6 +130,14 @@ public class TeamService {
                 teamId, memberId, List.of(TeamRole.OWNER));
         if (!isOwner) {
             throw new ForbiddenException("팀 Owner만 수행할 수 있는 작업입니다.");
+        }
+    }
+
+    public void verifyOwnerOrManager(Long teamId, Long memberId) {
+        boolean isOwnerOrManager = teamMemberRepository.existsByTeamIdAndMemberIdAndRoleIn(
+                teamId, memberId, List.of(TeamRole.OWNER, TeamRole.MANAGER));
+        if (!isOwnerOrManager) {
+            throw new ForbiddenException("팀 Owner 또는 Manager만 수행할 수 있는 작업입니다.");
         }
     }
 }

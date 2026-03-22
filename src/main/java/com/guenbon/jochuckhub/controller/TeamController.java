@@ -2,6 +2,7 @@ package com.guenbon.jochuckhub.controller;
 
 import com.guenbon.jochuckhub.dto.CustomUserDetails;
 import com.guenbon.jochuckhub.dto.request.CreateTeamRequest;
+import com.guenbon.jochuckhub.dto.request.CreateVirtualTeamRequest;
 import com.guenbon.jochuckhub.dto.request.UpdateTeamRequest;
 import com.guenbon.jochuckhub.dto.response.TeamDetailResponse;
 import com.guenbon.jochuckhub.dto.response.TeamSummaryResponse;
@@ -33,6 +34,24 @@ public class TeamController {
     @GetMapping
     public ResponseEntity<List<TeamSummaryResponse>> getTeams() {
         return ResponseEntity.ok(teamService.getTeams());
+    }
+
+    /**
+     * 팀 이름 검색: 실제 팀 + myTeamId가 만든 가상 팀
+     */
+    @GetMapping("/search")
+    public ResponseEntity<List<TeamSummaryResponse>> searchTeams(
+            @RequestParam String name,
+            @RequestParam Long myTeamId) {
+        return ResponseEntity.ok(teamService.searchTeams(name, myTeamId));
+    }
+
+    @PostMapping("/virtual")
+    public ResponseEntity<TeamSummaryResponse> createVirtualTeam(
+            @Valid @RequestBody CreateVirtualTeamRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(teamService.createVirtualTeam(request, userDetails));
     }
 
     @GetMapping("/{id}")
