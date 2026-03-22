@@ -1,18 +1,33 @@
 package com.guenbon.jochuckhub.controller;
 
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import com.guenbon.jochuckhub.config.jwt.JwtTokenProvider;
+import com.guenbon.jochuckhub.dto.request.LoginRequest;
+import com.guenbon.jochuckhub.dto.response.LoginResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-@Controller
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
-    @GetMapping("/login")
-    public String loginPage(@RequestParam(required = false) String error, Model model) {
-        if (error != null) {
-            model.addAttribute("errorMessage", "아이디 또는 비밀번호가 올바르지 않습니다.");
-        }
-        return "login";
+    private final AuthenticationManager authenticationManager;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword())
+        );
+        String token = jwtTokenProvider.generateToken(authentication.getName());
+        return ResponseEntity.ok(new LoginResponse(token));
     }
 }
