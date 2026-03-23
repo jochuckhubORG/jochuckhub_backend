@@ -39,6 +39,13 @@ public class MemberController {
         return ResponseEntity.ok(memberService.updateMember(id, request, userDetails));
     }
 
+    @GetMapping("/{id}/attendance-score")
+    public ResponseEntity<Integer> getAttendanceScore(
+            @PathVariable Long id,
+            @RequestParam Long teamId) {
+        return ResponseEntity.ok(memberService.getAttendanceScore(id, teamId));
+    }
+
     @PostMapping("/signup")
     public ResponseEntity<Void> signUp(@Valid @RequestBody SignUpRequest signUpRequest) {
         memberService.register(signUpRequest);

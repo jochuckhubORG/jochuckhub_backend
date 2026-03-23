@@ -59,6 +59,7 @@ public class MatchService {
                 .location(request.getLocation())
                 .createdBy(creator)
                 .voteDeadline(request.getVoteDeadline())
+                .durationMinutes(request.getDurationMinutes())
                 .build());
 
         return new MatchResponse(match);

@@ -48,4 +48,16 @@ public class MatchVote {
     public void updateActualStatus(ActualAttendStatus actualStatus) {
         this.actualStatus = actualStatus;
     }
+
+    /**
+     * 불참: 0점, 참석: 2점, 지각: 1점, 무단불참: -1점
+     */
+    public int getScore() {
+        if (attendStatus == AttendStatus.ABSENT) return 0;
+        if (actualStatus == null) return 2;
+        return switch (actualStatus) {
+            case LATE -> 1;
+            case NO_SHOW -> -1;
+        };
+    }
 }

@@ -1,5 +1,6 @@
 package com.guenbon.jochuckhub.repository;
 
+import com.guenbon.jochuckhub.entity.AttendStatus;
 import com.guenbon.jochuckhub.entity.MatchVote;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -11,4 +12,8 @@ public interface MatchVoteRepository extends JpaRepository<MatchVote, Long> {
     Optional<MatchVote> findByMatchIdAndMemberId(Long matchId, Long memberId);
 
     List<MatchVote> findAllByMatchId(Long matchId);
+
+    List<MatchVote> findTop8ByMemberIdAndMatchHomeTeamIdOrderByMatchMatchDateDesc(Long memberId, Long homeTeamId);
+
+    List<MatchVote> findAllByMatchIdAndAttendStatus(Long matchId, AttendStatus attendStatus);
 }

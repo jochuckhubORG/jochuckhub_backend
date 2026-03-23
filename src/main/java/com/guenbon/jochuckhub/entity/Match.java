@@ -40,14 +40,22 @@ public class Match {
     @Column
     private LocalDateTime voteDeadline;
 
+    @Column(nullable = false)
+    private int durationMinutes;
+
     @Builder
-    public Match(Team homeTeam, Team opponentTeam, LocalDateTime matchDate, String location, Member createdBy, LocalDateTime voteDeadline) {
+    public Match(Team homeTeam, Team opponentTeam, LocalDateTime matchDate, String location, Member createdBy, LocalDateTime voteDeadline, int durationMinutes) {
         this.homeTeam = homeTeam;
         this.opponentTeam = opponentTeam;
         this.matchDate = matchDate;
         this.location = location;
         this.createdBy = createdBy;
         this.voteDeadline = voteDeadline;
+        this.durationMinutes = durationMinutes;
+    }
+
+    public LocalDateTime getMatchEndTime() {
+        return matchDate.plusMinutes(durationMinutes);
     }
 
     public LocalDateTime getEffectiveVoteDeadline() {

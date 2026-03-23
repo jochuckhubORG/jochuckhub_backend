@@ -12,6 +12,8 @@ public class MatchResponse {
     private final TeamInfo homeTeam;
     private final TeamInfo opponentTeam;
     private final LocalDateTime matchDate;
+    private final int durationMinutes;
+    private final LocalDateTime matchEndTime;
     private final String location;
     private final String createdBy;
     private final LocalDateTime voteDeadline;
@@ -22,6 +24,8 @@ public class MatchResponse {
         this.opponentTeam = new TeamInfo(match.getOpponentTeam().getId(), match.getOpponentTeam().getName(),
                 match.getOpponentTeam().isVirtual());
         this.matchDate = match.getMatchDate();
+        this.durationMinutes = match.getDurationMinutes();
+        this.matchEndTime = match.getMatchEndTime();
         this.location = match.getLocation();
         this.createdBy = match.getCreatedBy().getName();
         this.voteDeadline = match.getEffectiveVoteDeadline();

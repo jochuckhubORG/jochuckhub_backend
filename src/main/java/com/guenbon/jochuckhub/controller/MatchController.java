@@ -2,7 +2,10 @@ package com.guenbon.jochuckhub.controller;
 
 import com.guenbon.jochuckhub.dto.CustomUserDetails;
 import com.guenbon.jochuckhub.dto.request.CreateMatchRequest;
+import com.guenbon.jochuckhub.dto.request.RecordMatchResultRequest;
 import com.guenbon.jochuckhub.dto.response.MatchResponse;
+import com.guenbon.jochuckhub.dto.response.MatchResultResponse;
+import com.guenbon.jochuckhub.service.MatchResultService;
 import com.guenbon.jochuckhub.service.MatchService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,7 @@ import java.util.List;
 public class MatchController {
 
     private final MatchService matchService;
+    private final MatchResultService matchResultService;
 
     @PostMapping
     public ResponseEntity<MatchResponse> createMatch(
@@ -36,5 +40,19 @@ public class MatchController {
     @GetMapping("/{id}")
     public ResponseEntity<MatchResponse> getMatch(@PathVariable Long id) {
         return ResponseEntity.ok(matchService.getMatch(id));
+    }
+
+    // 매치 종료 후 결과 입력 (최초 입력 및 수정 모두 동일 엔드포인트)
+    @PutMapping("/{id}/result")
+    public ResponseEntity<MatchResultResponse> recordResult(
+            @PathVariable Long id,
+            @Valid @RequestBody RecordMatchResultRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(matchResultService.recordResult(id, request, userDetails.getMemberId()));
+    }
+
+    @GetMapping("/{id}/result")
+    public ResponseEntity<MatchResultResponse> getResult(@PathVariable Long id) {
+        return ResponseEntity.ok(matchResultService.getResult(id));
     }
 }

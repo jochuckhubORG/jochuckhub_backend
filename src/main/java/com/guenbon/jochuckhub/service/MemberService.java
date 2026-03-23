@@ -7,7 +7,9 @@ import com.guenbon.jochuckhub.dto.response.MemberResponse;
 import com.guenbon.jochuckhub.entity.Member;
 import com.guenbon.jochuckhub.exception.ForbiddenException;
 import com.guenbon.jochuckhub.exception.MemberNotFoundException;
+import com.guenbon.jochuckhub.repository.MatchVoteRepository;
 import com.guenbon.jochuckhub.repository.MemberRepository;
+import com.guenbon.jochuckhub.repository.TeamMemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MatchVoteRepository matchVoteRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
     @Transactional
     public MemberResponse updateMember(Long targetId, UpdateMemberRequest request, CustomUserDetails requester) {
@@ -50,6 +54,20 @@ public class MemberService {
         return memberRepository.findAll().stream()
                 .map(MemberResponse::new)
                 .toList();
+    }
+
+    public int getAttendanceScore(Long memberId, Long teamId) {
+        if (!memberRepository.existsById(memberId)) {
+            throw new MemberNotFoundException();
+        }
+        if (!teamMemberRepository.existsByTeamIdAndMemberId(teamId, memberId)) {
+            throw new ForbiddenException("해당 팀 소속 멤버가 아닙니다.");
+        }
+        return matchVoteRepository
+                .findTop8ByMemberIdAndMatchHomeTeamIdOrderByMatchMatchDateDesc(memberId, teamId)
+                .stream()
+                .mapToInt(vote -> vote.getScore())
+                .sum();
     }
 
     @Transactional
