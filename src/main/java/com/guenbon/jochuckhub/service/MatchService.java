@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -32,6 +33,10 @@ public class MatchService {
         Long homeTeamId = request.getHomeTeamId();
 
         teamService.verifyOwnerOrManager(homeTeamId, requester.getMemberId());
+
+        if (request.getMatchDate().isBefore(LocalDateTime.now().plusHours(2))) {
+            throw new IllegalArgumentException("매치는 현재 시간으로부터 최소 2시간 이후로만 생성할 수 있습니다.");
+        }
 
         Team homeTeam = teamRepository.findById(homeTeamId)
                 .orElseThrow(TeamNotFoundException::new);

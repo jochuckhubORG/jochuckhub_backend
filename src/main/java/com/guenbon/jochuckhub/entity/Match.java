@@ -51,6 +51,10 @@ public class Match {
     }
 
     public LocalDateTime getEffectiveVoteDeadline() {
-        return voteDeadline != null ? voteDeadline : matchDate;
+        LocalDateTime latestAllowed = matchDate.minusHours(1);
+        if (voteDeadline == null || voteDeadline.isAfter(latestAllowed)) {
+            return latestAllowed;
+        }
+        return voteDeadline;
     }
 }
