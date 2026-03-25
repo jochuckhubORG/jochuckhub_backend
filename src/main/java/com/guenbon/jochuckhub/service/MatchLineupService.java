@@ -1,11 +1,13 @@
 package com.guenbon.jochuckhub.service;
 
+import com.guenbon.jochuckhub.dto.request.SaveLineupRequest;
 import com.guenbon.jochuckhub.dto.response.MatchLineupResponse;
 import com.guenbon.jochuckhub.entity.*;
 import com.guenbon.jochuckhub.exception.ForbiddenException;
 import com.guenbon.jochuckhub.repository.MatchLineupEntryRepository;
 import com.guenbon.jochuckhub.repository.MatchRepository;
 import com.guenbon.jochuckhub.repository.MatchVoteRepository;
+import com.guenbon.jochuckhub.repository.MemberRepository;
 import com.guenbon.jochuckhub.repository.TeamMemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ public class MatchLineupService {
 
     private final MatchRepository matchRepository;
     private final MatchVoteRepository matchVoteRepository;
+    private final MemberRepository memberRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final MatchLineupEntryRepository lineupEntryRepository;
 
@@ -118,6 +121,53 @@ public class MatchLineupService {
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("라인업이 아직 생성되지 않았습니다.");
         }
+        return buildResponse(matchId, entries);
+    }
+
+    @Transactional
+    public MatchLineupResponse saveLineup(Long matchId, SaveLineupRequest request, Long requesterId) {
+        Match match = findMatch(matchId);
+
+        // OWNER/MANAGER 권한 확인
+        if (!teamMemberRepository.existsByTeamIdAndMemberIdAndRoleIn(
+                match.getHomeTeam().getId(), requesterId,
+                List.of(TeamRole.OWNER, TeamRole.MANAGER))) {
+            throw new ForbiddenException("OWNER 또는 MANAGER만 라인업을 저장할 수 있습니다.");
+        }
+
+        // 투표 마감 확인
+        if (LocalDateTime.now().isBefore(match.getEffectiveVoteDeadline())) {
+            throw new IllegalArgumentException("투표가 아직 마감되지 않았습니다.");
+        }
+
+        // 쿼터 번호 유효성 확인 (1~4 각각 1개씩)
+        List<Integer> quarterNumbers = request.getQuarters().stream()
+                .map(SaveLineupRequest.QuarterEntry::getQuarter)
+                .sorted()
+                .toList();
+        if (!quarterNumbers.equals(List.of(1, 2, 3, 4))) {
+            throw new IllegalArgumentException("1~4쿼터 데이터가 각각 1개씩 있어야 합니다.");
+        }
+
+        // 기존 라인업 삭제 후 저장
+        lineupEntryRepository.deleteByMatchId(matchId);
+
+        List<MatchLineupEntry> entries = new ArrayList<>();
+        for (SaveLineupRequest.QuarterEntry quarterEntry : request.getQuarters()) {
+            for (SaveLineupRequest.PlayerEntry playerEntry : quarterEntry.getPlayers()) {
+                Member member = memberRepository.findById(playerEntry.getMemberId())
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "존재하지 않는 멤버입니다: " + playerEntry.getMemberId()));
+                entries.add(MatchLineupEntry.builder()
+                        .match(match)
+                        .quarter(quarterEntry.getQuarter())
+                        .member(member)
+                        .position(playerEntry.getPosition())
+                        .build());
+            }
+        }
+
+        lineupEntryRepository.saveAll(entries);
         return buildResponse(matchId, entries);
     }
 

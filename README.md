@@ -167,7 +167,8 @@ src/main/java/com/guenbon/jochuckhub/
 ### 매치 라인업
 | 메서드 | 경로 | 설명 | 인증 |
 |--------|------|------|------|
-| POST | `/api/matches/{matchId}/lineup` | 라인업 자동 생성 (투표 마감 후, 14~20명) | OWNER/MANAGER |
+| POST | `/api/matches/{matchId}/lineup` | 라인업 자동 생성 (출석율+헝가리안 알고리즘, 14~20명) | OWNER/MANAGER |
+| PUT | `/api/matches/{matchId}/lineup` | 라인업 저장 (수동 생성 또는 자동 생성 후 수정) | OWNER/MANAGER |
 | GET | `/api/matches/{matchId}/lineup` | 라인업 조회 | 필요 |
 
 > Swagger UI: 서버 실행 후 `http://localhost:8080/swagger-ui/index.html`

@@ -1,10 +1,12 @@
 package com.guenbon.jochuckhub.controller;
 
 import com.guenbon.jochuckhub.dto.CustomUserDetails;
+import com.guenbon.jochuckhub.dto.request.SaveLineupRequest;
 import com.guenbon.jochuckhub.dto.response.MatchLineupResponse;
 import com.guenbon.jochuckhub.service.MatchLineupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,6 +28,17 @@ public class MatchLineupController {
             @PathVariable Long matchId,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(matchLineupService.generateLineup(matchId, userDetails.getMemberId()));
+    }
+
+    @PutMapping
+    @Operation(summary = "라인업 직접 저장 (수동 생성 / 자동 생성 후 수정)",
+            description = "4쿼터 전체 라인업을 전달하면 기존 라인업을 덮어씁니다. " +
+                    "각 쿼터는 정확히 10명이어야 합니다. OWNER/MANAGER만 가능합니다.")
+    public ResponseEntity<MatchLineupResponse> saveLineup(
+            @PathVariable Long matchId,
+            @RequestBody @Valid SaveLineupRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(matchLineupService.saveLineup(matchId, request, userDetails.getMemberId()));
     }
 
     @GetMapping
