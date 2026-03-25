@@ -100,6 +100,7 @@ src/main/java/com/guenbon/jochuckhub/
 | `Match` | 경기 기록(`match_record` 테이블). homeTeam(실제) + opponentTeam(실제 또는 가상) |
 | `MatchVote` | 경기 참석 투표. `AttendStatus`(ATTEND/ABSENT) + `ActualAttendStatus`(LATE/NO_SHOW) |
 | `Goal` | 골 기록. 홈팀 골(scorer, assister) 또는 상대팀 골(`opponentGoal=true`) |
+| `MatchLineupEntry` | 쿼터별 포지션 배정 기록. 4-3-3 포메이션 기반 자동 생성 |
 
 ### Position enum
 
@@ -107,8 +108,8 @@ src/main/java/com/guenbon/jochuckhub/
 |---------|---|
 | 골키퍼 | `GK` |
 | 수비수 | `CB`, `LB`, `RB`, `LWB`, `RWB` |
-| 미드필더 | `CDM`, `CM`, `CAM`, `LM`, `RM` |
-| 공격수 | `LW`, `RW`, `ST`, `CF` |
+| 미드필더 | `CDM`, `CM` |
+| 공격수 | `LW`, `RW`, `ST` |
 
 ### 참여 점수 기준 (최근 8경기)
 
@@ -162,6 +163,12 @@ src/main/java/com/guenbon/jochuckhub/
 | PUT | `/api/matches/{matchId}/votes` | 투표 수정 | 홈팀 멤버 |
 | GET | `/api/matches/{matchId}/votes` | 투표 결과 조회 | 홈팀 멤버 |
 | PATCH | `/api/matches/{matchId}/votes/{memberId}/actual-status` | 실제 출석 상태 표시 (지각/무단불참) | OWNER/MANAGER |
+
+### 매치 라인업
+| 메서드 | 경로 | 설명 | 인증 |
+|--------|------|------|------|
+| POST | `/api/matches/{matchId}/lineup` | 라인업 자동 생성 (투표 마감 후, 14~20명) | OWNER/MANAGER |
+| GET | `/api/matches/{matchId}/lineup` | 라인업 조회 | 필요 |
 
 > Swagger UI: 서버 실행 후 `http://localhost:8080/swagger-ui/index.html`
 
