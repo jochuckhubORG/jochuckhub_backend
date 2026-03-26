@@ -19,4 +19,7 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     @Query("SELECT t FROM Team t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :name, '%')) " +
             "AND (t.virtual = false OR (t.virtual = true AND t.createdByTeamId = :myTeamId))")
     List<Team> searchByNameForTeam(@Param("name") String name, @Param("myTeamId") Long myTeamId);
+
+    @Query("SELECT t FROM Team t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :name, '%')) AND t.virtual = false")
+    List<Team> searchRealTeamsByName(@Param("name") String name);
 }

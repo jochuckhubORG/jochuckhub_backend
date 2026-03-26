@@ -1,6 +1,7 @@
 package com.guenbon.jochuckhub.controller;
 
 import com.guenbon.jochuckhub.config.jwt.JwtTokenProvider;
+import com.guenbon.jochuckhub.dto.CustomUserDetails;
 import com.guenbon.jochuckhub.dto.request.LoginRequest;
 import com.guenbon.jochuckhub.dto.response.LoginResponse;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ public class AuthController {
                 new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword())
         );
         String token = jwtTokenProvider.generateToken(authentication.getName());
-        return ResponseEntity.ok(new LoginResponse(token));
+        Long memberId = ((CustomUserDetails) authentication.getPrincipal()).getMemberId();
+        return ResponseEntity.ok(new LoginResponse(token, memberId));
     }
 }

@@ -32,17 +32,19 @@ public class TeamController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TeamSummaryResponse>> getTeams() {
-        return ResponseEntity.ok(teamService.getTeams());
+    public ResponseEntity<List<TeamSummaryResponse>> getTeams(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(teamService.getTeams(userDetails.getMemberId()));
     }
 
     /**
      * 팀 이름 검색: 실제 팀 + myTeamId가 만든 가상 팀
+     * myTeamId가 없으면 실제 팀만 검색
      */
     @GetMapping("/search")
     public ResponseEntity<List<TeamSummaryResponse>> searchTeams(
             @RequestParam String name,
-            @RequestParam Long myTeamId) {
+            @RequestParam(required = false) Long myTeamId) {
         return ResponseEntity.ok(teamService.searchTeams(name, myTeamId));
     }
 
@@ -55,8 +57,18 @@ public class TeamController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TeamDetailResponse> getTeam(@PathVariable Long id) {
-        return ResponseEntity.ok(teamService.getTeam(id));
+    public ResponseEntity<TeamDetailResponse> getTeam(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(teamService.getTeam(id, userDetails.getMemberId()));
+    }
+
+    @PostMapping("/{id}/join")
+    public ResponseEntity<Void> joinTeam(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        teamService.joinTeam(id, userDetails.getMemberId());
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/{id}")

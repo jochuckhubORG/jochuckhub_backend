@@ -16,12 +16,14 @@ public class TeamDetailResponse {
     private final MemberResponse owner;
     private final List<MemberResponse> managers;
     private final int memberCount;
+    private final TeamRole currentUserRole; // null이면 팀 미소속
 
-    public TeamDetailResponse(Team team) {
+    public TeamDetailResponse(Team team, TeamRole currentUserRole) {
         this.id = team.getId();
         this.name = team.getName();
         this.virtual = team.isVirtual();
         this.memberCount = team.getTeamMembers().size();
+        this.currentUserRole = currentUserRole;
 
         this.owner = team.getTeamMembers().stream()
                 .filter(tm -> tm.getRole() == TeamRole.OWNER)

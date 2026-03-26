@@ -53,22 +53,45 @@ public class TeamService {
 
         // 저장 후 연관관계 반영을 위해 다시 조회
         return new TeamDetailResponse(teamRepository.findById(team.getId())
-                .orElseThrow(TeamNotFoundException::new));
+                .orElseThrow(TeamNotFoundException::new), TeamRole.OWNER);
     }
 
-    public List<TeamSummaryResponse> getTeams() {
-        return teamRepository.findAll().stream()
+    public List<TeamSummaryResponse> getTeams(Long memberId) {
+        return teamMemberRepository.findAllByMemberId(memberId).stream()
+                .map(TeamMember::getTeam)
+                .filter(t -> !t.isVirtual())
                 .map(TeamSummaryResponse::new)
                 .toList();
     }
 
     /**
      * 팀 이름으로 검색: 실제 팀 전체 + myTeamId가 만든 가상 팀
+     * myTeamId가 null이면 실제 팀만 검색
      */
     public List<TeamSummaryResponse> searchTeams(String name, Long myTeamId) {
-        return teamRepository.searchByNameForTeam(name, myTeamId).stream()
-                .map(TeamSummaryResponse::new)
-                .toList();
+        List<Team> teams = (myTeamId != null)
+                ? teamRepository.searchByNameForTeam(name, myTeamId)
+                : teamRepository.searchRealTeamsByName(name);
+        return teams.stream().map(TeamSummaryResponse::new).toList();
+    }
+
+    @Transactional
+    public void joinTeam(Long teamId, Long memberId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(TeamNotFoundException::new);
+        if (team.isVirtual()) {
+            throw new IllegalArgumentException("가상 팀에는 가입할 수 없습니다.");
+        }
+        if (teamMemberRepository.existsByTeamIdAndMemberId(teamId, memberId)) {
+            throw new IllegalArgumentException("이미 해당 팀의 멤버입니다.");
+        }
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(MemberNotFoundException::new);
+        teamMemberRepository.save(TeamMember.builder()
+                .team(team)
+                .member(member)
+                .role(TeamRole.PLAYER)
+                .build());
     }
 
     @Transactional
@@ -93,10 +116,13 @@ public class TeamService {
         return new TeamSummaryResponse(virtualTeam);
     }
 
-    public TeamDetailResponse getTeam(Long teamId) {
+    public TeamDetailResponse getTeam(Long teamId, Long memberId) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(TeamNotFoundException::new);
-        return new TeamDetailResponse(team);
+        TeamRole role = teamMemberRepository.findByTeamIdAndMemberId(teamId, memberId)
+                .map(TeamMember::getRole)
+                .orElse(null);
+        return new TeamDetailResponse(team, role);
     }
 
     @Transactional
@@ -111,7 +137,7 @@ public class TeamService {
         }
 
         team.updateName(request.getName());
-        return new TeamDetailResponse(team);
+        return new TeamDetailResponse(team, TeamRole.OWNER);
     }
 
     @Transactional

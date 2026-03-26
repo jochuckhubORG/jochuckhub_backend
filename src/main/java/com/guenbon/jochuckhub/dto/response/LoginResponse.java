@@ -7,8 +7,10 @@ public class LoginResponse {
 
     private final String accessToken;
     private final String tokenType = "Bearer";
+    private final Long memberId;
 
-    public LoginResponse(String accessToken) {
+    public LoginResponse(String accessToken, Long memberId) {
         this.accessToken = accessToken;
+        this.memberId = memberId;
     }
 }
