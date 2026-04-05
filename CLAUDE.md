@@ -197,3 +197,12 @@ Exception (기타)                  → 500  INTERNAL_SERVER_ERROR
 
 - 새로 추가된 파일이 있으면 작업 후 git add 한다.
 - API 수정사항이 발생하면 이 파일도 함께 수정한다.
+
+## API_REFERENCE.md 관리 규칙
+
+- **API를 추가하거나 수정할 때마다** `API_REFERENCE.md`도 반드시 함께 업데이트한다.
+  - 엔드포인트 요약 테이블에 추가/수정
+  - 해당 섹션의 상세 설명 추가/수정
+- **작업 완료 후** `API_REFERENCE.md` 최상단의 `## 최근 작업 (CLAUDE CODE)` 섹션을 갱신한다.
+  - 방금 수행한 작업 설명을 맨 위에 추가하고, 목록이 3개를 초과하면 가장 오래된 항목을 제거하여 최대 3개를 유지한다.
+  - 형식: `- YYYY-MM-DD: <작업 설명> (예: POST /api/foo 추가, GET /api/bar 수정)`
