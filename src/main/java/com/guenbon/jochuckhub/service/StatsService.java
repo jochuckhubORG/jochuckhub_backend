@@ -6,7 +6,7 @@ import com.guenbon.jochuckhub.entity.Goal;
 import com.guenbon.jochuckhub.entity.TeamMember;
 import com.guenbon.jochuckhub.exception.MemberNotFoundException;
 import com.guenbon.jochuckhub.exception.TeamNotFoundException;
-import com.guenbon.jochuckhub.repository.GoalRepository;
+import com.guenbon.jochuckhub.repository.goal.GoalRepository;
 import com.guenbon.jochuckhub.repository.MatchLineupEntryRepository;
 import com.guenbon.jochuckhub.repository.MemberRepository;
 import com.guenbon.jochuckhub.repository.TeamMemberRepository;
