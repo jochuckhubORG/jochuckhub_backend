@@ -8,6 +8,7 @@
 
 ## 최근 작업 (CLAUDE CODE)
 
+- 2026-04-05: `GET /api/teams/{id}/members` 팀원 목록+통계 추가, `GET /api/members/{id}/goal-records` 선수 기록 조회(다중 필터) 추가
 - 2026-04-05: `POST /api/teams/{id}/join` 팀 가입 API 추가
 
 ---
@@ -22,11 +23,13 @@
 | `GET` | `/api/members/{id}` | 인증 | 회원 상세 조회 |
 | `PUT` | `/api/members/{id}` | 인증(본인) | 회원 프로필 수정 |
 | `GET` | `/api/members/{id}/attendance-score` | 인증 | 팀 내 참여 점수 조회 |
+| `GET` | `/api/members/{id}/goal-records` | 인증 | 선수 기록 조회 (골/어시스트, 다중 필터) |
 | `POST` | `/api/teams` | 인증 | 팀 생성 |
 | `GET` | `/api/teams` | 인증 | 내 소속 팀 목록 |
 | `GET` | `/api/teams/search` | 인증 | 팀 이름 검색 |
 | `POST` | `/api/teams/virtual` | OWNER/MANAGER | 가상 팀 생성 |
 | `GET` | `/api/teams/{id}` | 인증 | 팀 상세 조회 |
+| `GET` | `/api/teams/{id}/members` | 인증 | 팀원 목록 + 통계 (골/어시스트/출전경기) |
 | `POST` | `/api/teams/{id}/join` | 인증 | 팀 가입 (PLAYER) |
 | `PUT` | `/api/teams/{id}` | OWNER | 팀 정보 수정 |
 | `DELETE` | `/api/teams/{id}` | OWNER | 팀 삭제 |

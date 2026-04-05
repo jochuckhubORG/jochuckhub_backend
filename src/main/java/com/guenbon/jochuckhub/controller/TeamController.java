@@ -5,7 +5,9 @@ import com.guenbon.jochuckhub.dto.request.CreateTeamRequest;
 import com.guenbon.jochuckhub.dto.request.CreateVirtualTeamRequest;
 import com.guenbon.jochuckhub.dto.request.UpdateTeamRequest;
 import com.guenbon.jochuckhub.dto.response.TeamDetailResponse;
+import com.guenbon.jochuckhub.dto.response.TeamMemberStatsResponse;
 import com.guenbon.jochuckhub.dto.response.TeamSummaryResponse;
+import com.guenbon.jochuckhub.service.StatsService;
 import com.guenbon.jochuckhub.service.TeamService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ import java.util.List;
 public class TeamController {
 
     private final TeamService teamService;
+    private final StatsService statsService;
 
     @PostMapping
     public ResponseEntity<TeamDetailResponse> createTeam(
@@ -77,6 +80,11 @@ public class TeamController {
             @Valid @RequestBody UpdateTeamRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(teamService.updateTeam(id, request, userDetails));
+    }
+
+    @GetMapping("/{id}/members")
+    public ResponseEntity<List<TeamMemberStatsResponse>> getTeamMembers(@PathVariable Long id) {
+        return ResponseEntity.ok(statsService.getTeamMemberStats(id));
     }
 
     @DeleteMapping("/{id}")

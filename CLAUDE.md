@@ -113,6 +113,7 @@ src/main/java/com/guenbon/jochuckhub/
 | `GET` | `/api/members/{id}` | 인증 |
 | `PUT` | `/api/members/{id}` | 인증(본인) |
 | `GET` | `/api/members/{id}/attendance-score?teamId=xxx` | 인증 |
+| `GET` | `/api/members/{id}/goal-records?teamId=xxx[&type=GOAL\|ASSIST][&sortDirection=ASC\|DESC][&opponentTeamId=yyy][&startDate=yyyy-MM-dd][&endDate=yyyy-MM-dd][&relatedMemberId=zzz]` | 인증 |
 
 ### 팀
 | 메서드 | URL | 권한 |
@@ -120,6 +121,7 @@ src/main/java/com/guenbon/jochuckhub/
 | `POST` | `/api/teams` | 인증 |
 | `GET` | `/api/teams` | 인증 (내 소속 팀만 반환) |
 | `GET` | `/api/teams/{id}` | 인증 (응답에 `currentUserRole` 포함) |
+| `GET` | `/api/teams/{id}/members` | 인증 (팀원 목록 + 골/어시스트/출전경기 통계) |
 | `PUT` | `/api/teams/{id}` | OWNER |
 | `DELETE` | `/api/teams/{id}` | OWNER |
 | `GET` | `/api/teams/search?name=xxx[&myTeamId=yyy]` | 인증 (myTeamId 없으면 실제 팀만 검색) |
@@ -170,6 +172,8 @@ src/main/java/com/guenbon/jochuckhub/
 - `MemberResponse`: id, username, name, mainPosition, subPositions
 - `TeamSummaryResponse`: id, name, virtual, memberCount
 - `TeamDetailResponse`: id, name, virtual, owner, managers[], memberCount, currentUserRole
+- `TeamMemberStatsResponse`: id, username, name, mainPosition, subPositions, role, goals, assists, appearances
+- `GoalRecordResponse`: matchId, matchDate, opponentTeamId, opponentTeamName, type(GOAL/ASSIST), relatedMemberId, relatedMemberName
 - `MatchResponse`: id, homeTeam, opponentTeam, matchDate, durationMinutes, matchEndTime, location, createdBy, voteDeadline
 - `MatchVoteResultResponse`: matchId, voteDeadline, voteClosed, matchStarted, attendVotes[], absentVotes[], notVotedMembers[], attendCount, absentCount, notVotedCount
 - `MatchLineupResponse`: quarters[{quarter, players[{memberId, memberName, assignedPosition, positionFit}]}]
