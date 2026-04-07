@@ -2,7 +2,6 @@ package com.guenbon.jochuckhub.service;
 
 import com.guenbon.jochuckhub.dto.response.GoalRecordResponse;
 import com.guenbon.jochuckhub.dto.response.TeamMemberStatsResponse;
-import com.guenbon.jochuckhub.entity.Goal;
 import com.guenbon.jochuckhub.entity.TeamMember;
 import com.guenbon.jochuckhub.exception.MemberNotFoundException;
 import com.guenbon.jochuckhub.exception.TeamNotFoundException;
@@ -17,11 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -87,25 +84,11 @@ public class StatsService {
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : null;
 
-        List<Goal> goals = goalRepository.findGoalRecordsByMemberAndFilters(
-                teamId, memberId, opponentTeamId, startDateTime, endDateTime, relatedMemberId);
-
-        Stream<Goal> stream = goals.stream();
-        if ("GOAL".equalsIgnoreCase(type)) {
-            stream = stream.filter(g -> g.getScorer() != null && g.getScorer().getId().equals(memberId));
-        } else if ("ASSIST".equalsIgnoreCase(type)) {
-            stream = stream.filter(g -> g.getAssister() != null && g.getAssister().getId().equals(memberId));
-        }
-
-        List<GoalRecordResponse> result = stream
+        return goalRepository.findGoalRecords(
+                        teamId, memberId, type, sortDirection, opponentTeamId, startDateTime, endDateTime, relatedMemberId)
+                .stream()
                 .map(g -> new GoalRecordResponse(g, memberId))
-                .collect(Collectors.toList());
-
-        if ("ASC".equalsIgnoreCase(sortDirection)) {
-            result.sort(Comparator.comparing(GoalRecordResponse::getMatchDate));
-        }
-
-        return result;
+                .toList();
     }
 
     private Map<Long, Long> toMap(List<Object[]> rows) {
