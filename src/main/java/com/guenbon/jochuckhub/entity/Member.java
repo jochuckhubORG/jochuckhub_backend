@@ -20,12 +20,15 @@ public class Member {
     private Long id;
 
     @Column(nullable = false, unique = true)
-    private String username;  // 로그인/회원가입 시 사용하는 아이디
+    private String username;  // "kakao_{kakaoId}" 형식
+
+    @Column(nullable = false, unique = true)
+    private String kakaoId;
 
     @Column(nullable = false)
     private String name;  // 실제 이름 (예: 장지담)
 
-    @Column(nullable = false)
+    @Column
     private String password;
 
     @Enumerated(EnumType.STRING)
@@ -40,11 +43,11 @@ public class Member {
     private Set<Position> subPositions = new HashSet<>();
 
     @Builder
-    public Member(String username, String name, String password,
+    public Member(String kakaoId, String name,
                   Position mainPosition, Set<Position> subPositions) {
-        this.username = username;
+        this.kakaoId = kakaoId;
+        this.username = "kakao_" + kakaoId;
         this.name = name;
-        this.password = password;
         this.mainPosition = mainPosition;
         this.subPositions = subPositions != null ? subPositions : new HashSet<>();
     }

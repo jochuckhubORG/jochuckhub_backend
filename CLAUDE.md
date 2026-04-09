@@ -41,12 +41,15 @@ src/main/java/com/guenbon/jochuckhub/
 
 ## 인증 흐름
 
-1. `POST /api/auth/login` → JWT 발급 (`{ accessToken, tokenType: "Bearer", memberId }`)
-2. 이후 모든 요청: `Authorization: Bearer <token>` 헤더
-3. `JwtAuthenticationFilter` → `JwtTokenProvider` 검증 → `SecurityContext`에 `CustomUserDetails` 저장
-4. 컨트롤러에서 `@AuthenticationPrincipal CustomUserDetails`로 현재 사용자 추출
+1. 프론트엔드가 `GET /api/auth/kakao?redirectUri=...` 또는 직접 카카오 URL로 사용자를 리다이렉트
+2. 사용자가 카카오 로그인 → 카카오가 `redirectUri?code=xxx`로 리다이렉트
+3. 프론트엔드가 `POST /api/auth/kakao { code, redirectUri }` 호출
+4. 서버: 인가코드 → 카카오 액세스 토큰 → 카카오 사용자 정보 → Member 조회/생성 → JWT 발급
+5. 응답: `{ accessToken, tokenType: "Bearer", memberId, isNewMember }`
+   - `isNewMember=true` 이면 프론트에서 포지션 설정 (`PUT /api/members/{id}`) 유도
+6. 이후 모든 요청: `Authorization: Bearer <token>` 헤더
 
-공개 엔드포인트: `POST /api/auth/login`, `POST /api/members/signup`, `/swagger-ui/**`, `/v3/api-docs/**`
+공개 엔드포인트: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`
 
 ## 권한 체계
 
@@ -103,12 +106,12 @@ src/main/java/com/guenbon/jochuckhub/
 ### 인증
 | 메서드 | URL | 권한 |
 |--------|-----|------|
-| `POST` | `/api/auth/login` | 공개 |
+| `GET` | `/api/auth/kakao?redirectUri=xxx` | 공개 (카카오 로그인 페이지로 리다이렉트) |
+| `POST` | `/api/auth/kakao` | 공개 (인가코드 → JWT 발급) |
 
 ### 회원
 | 메서드 | URL | 권한 |
 |--------|-----|------|
-| `POST` | `/api/members/signup` | 공개 |
 | `GET` | `/api/members` | 인증 |
 | `GET` | `/api/members/{id}` | 인증 |
 | `PUT` | `/api/members/{id}` | 인증(본인) |

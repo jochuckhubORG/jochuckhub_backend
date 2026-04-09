@@ -1,7 +1,6 @@
 package com.guenbon.jochuckhub.controller;
 
 import com.guenbon.jochuckhub.dto.CustomUserDetails;
-import com.guenbon.jochuckhub.dto.request.SignUpRequest;
 import com.guenbon.jochuckhub.dto.request.UpdateMemberRequest;
 import com.guenbon.jochuckhub.dto.response.GoalRecordResponse;
 import com.guenbon.jochuckhub.dto.response.MemberResponse;
@@ -10,7 +9,6 @@ import com.guenbon.jochuckhub.service.StatsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -77,9 +75,4 @@ public class MemberController {
                 id, teamId, type, sortDirection, opponentTeamId, startDate, endDate, relatedMemberId));
     }
 
-    @PostMapping("/signup")
-    public ResponseEntity<Void> signUp(@Valid @RequestBody SignUpRequest signUpRequest) {
-        memberService.register(signUpRequest);
-        return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
 }

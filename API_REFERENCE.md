@@ -8,6 +8,7 @@
 
 ## 최근 작업 (CLAUDE CODE)
 
+- 2026-04-10: 카카오 OAuth2 로그인으로 변경 — `POST /api/auth/login` 제거, `POST /api/auth/kakao` + `GET /api/auth/kakao` 추가, `POST /api/members/signup` 제거
 - 2026-04-05: `GET /api/teams/{id}/members` 팀원 목록+통계 추가, `GET /api/members/{id}/goal-records` 선수 기록 조회(다중 필터) 추가
 - 2026-04-05: `POST /api/teams/{id}/join` 팀 가입 API 추가
 
@@ -17,8 +18,8 @@
 
 | 메서드 | URL | 권한 | 설명 |
 |--------|-----|------|------|
-| `POST` | `/api/auth/login` | 공개 | 로그인 / JWT 발급 |
-| `POST` | `/api/members/signup` | 공개 | 회원가입 |
+| `GET` | `/api/auth/kakao` | 공개 | 카카오 로그인 페이지로 리다이렉트 |
+| `POST` | `/api/auth/kakao` | 공개 | 카카오 인가코드 → JWT 발급 (로그인/자동가입) |
 | `GET` | `/api/members` | 인증 | 전체 회원 목록 |
 | `GET` | `/api/members/{id}` | 인증 | 회원 상세 조회 |
 | `PUT` | `/api/members/{id}` | 인증(본인) | 회원 프로필 수정 |

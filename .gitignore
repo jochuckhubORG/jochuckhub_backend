@@ -38,3 +38,6 @@ out/
 
 ### Claude Code ###
 .claude/settings.local.json
+
+### Secret properties ###
+src/main/resources/application-private.properties
