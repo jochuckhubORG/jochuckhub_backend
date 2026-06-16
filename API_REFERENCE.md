@@ -8,9 +8,9 @@
 
 ## 최근 작업 (CLAUDE CODE)
 
+- 2026-06-16: `API_REFERENCE.md` 최신화 — 카카오 OAuth2 상세 문서 정비, `LoginResponse`에 `isNewMember` 추가, 삭제된 `/api/auth/login`·`/api/members/signup` 상세 섹션 제거
 - 2026-04-10: 카카오 OAuth2 로그인으로 변경 — `POST /api/auth/login` 제거, `POST /api/auth/kakao` + `GET /api/auth/kakao` 추가, `POST /api/members/signup` 제거
 - 2026-04-05: `GET /api/teams/{id}/members` 팀원 목록+통계 추가, `GET /api/members/{id}/goal-records` 선수 기록 조회(다중 필터) 추가
-- 2026-04-05: `POST /api/teams/{id}/join` 팀 가입 API 추가
 
 ---
 
@@ -57,7 +57,7 @@ JWT Bearer 토큰 방식을 사용합니다.
 Authorization: Bearer <accessToken>
 ```
 
-공개 엔드포인트 (인증 불필요): `POST /api/auth/login`, `POST /api/members/signup`
+공개 엔드포인트 (인증 불필요): `GET /api/auth/kakao`, `POST /api/auth/kakao`, `/swagger-ui/**`, `/v3/api-docs/**`
 
 ---
 
@@ -107,16 +107,31 @@ LATE | NO_SHOW
 
 ## 1. 인증 API
 
-### POST /api/auth/login
-로그인 후 JWT 토큰을 발급합니다.
+### GET /api/auth/kakao?redirectUri={redirectUri}
+카카오 로그인 페이지로 리다이렉트합니다.
+
+**인증 불필요**
+
+**Query Parameters**
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| redirectUri | String | 필수 | 카카오 인가 후 돌아올 프론트엔드 콜백 URL |
+
+**Response 302** — 카카오 OAuth2 인증 페이지로 리다이렉트
+
+---
+
+### POST /api/auth/kakao
+카카오 인가코드로 로그인/자동가입 처리 후 JWT를 발급합니다.
 
 **인증 불필요**
 
 **Request Body**
 ```json
 {
-  "username": "string (필수)",
-  "password": "string (필수)"
+  "code": "string (필수, 카카오 인가코드)",
+  "redirectUri": "string (필수, GET 요청과 동일한 콜백 URL)"
 }
 ```
 
@@ -125,34 +140,15 @@ LATE | NO_SHOW
 {
   "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
   "tokenType": "Bearer",
-  "memberId": 1
+  "memberId": 1,
+  "isNewMember": false
 }
 ```
+> `isNewMember=true`이면 프론트엔드에서 포지션 설정(`PUT /api/members/{id}`)을 유도해야 합니다.
 
 ---
 
 ## 2. 회원 API
-
-### POST /api/members/signup
-신규 회원가입을 합니다.
-
-**인증 불필요**
-
-**Request Body**
-```json
-{
-  "username": "string (필수)",
-  "password": "string (필수)",
-  "name": "string (필수)",
-  "mainPosition": "ST (필수)",
-  "subPositions": ["LW", "RW"]
-}
-```
-> `subPositions`: 최대 3개, 중복 불가. 생략 시 빈 배열.
-
-**Response 201** (본문 없음)
-
----
 
 ### GET /api/members
 전체 회원 목록을 조회합니다.
