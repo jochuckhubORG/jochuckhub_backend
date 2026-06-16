@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 개요
 
-**조축허브(JochukhHub)** — 조기 축구 팀 관리 웹 애플리케이션 백엔드.
+**조축허브(JochuckHub)** — 조기 축구 팀 관리 웹 애플리케이션 백엔드.
 Java 17 + Spring Boot 3.3.4 + Spring Security (JWT Stateless) + Spring Data JPA + MySQL
 
 Git remote: `https://github.com/jd99iam/jochuckhub.git`
@@ -19,37 +19,71 @@ gradlew.bat test
 gradlew.bat test --tests "com.guenbon.jochuckhub.service.MemberServiceTest"
 ```
 
+## Git 제외 설정 파일
+
+아래 파일들은 `.gitignore`에 등록되어 있어 저장소에 포함되지 않는다. 새 환경에서 직접 생성해야 한다.
+
+### `src/main/resources/application-private.properties`
+
+비밀 키 등 민감한 설정을 담는 파일. `application.properties`에서 `spring.config.import`로 자동 로드된다.
+
+```properties
+# DB 비밀번호
+spring.datasource.password=<mysql_password>
+
+# JWT 서명 키 (256비트 이상 Base64 인코딩)
+jwt.secret=<jwt_secret>
+
+# 카카오 OAuth2
+kakao.client-id=<kakao_rest_api_key>
+kakao.client-secret=<kakao_client_secret>
+```
+
+카카오 클라이언트 ID/Secret은 [카카오 개발자 콘솔](https://developers.kakao.com)에서 발급받는다.
+`kakao.redirect-uri`(콜백 URL)는 콘솔의 "Redirect URI" 항목에 동일하게 등록해야 한다.
+
+## 로컬 테스트 페이지
+
+`src/main/resources/static/test-login.html` — 앱 실행 후 `http://localhost:8080/test-login.html`에서 접근 가능.
+
+- 카카오 로그인 버튼 → `/api/auth/kakao` 리다이렉트 → 카카오 인증 → `/api/auth/kakao/callback` → 이 페이지로 복귀
+- 로그인 성공 시 JWT가 `accessToken` HttpOnly 쿠키로 저장됨
+- 회원 목록·팀 목록 조회, 팀 생성 등 기본 API를 브라우저에서 직접 테스트할 수 있음
+- 같은 Origin(`localhost:8080`)이므로 CORS 설정 없이 동작
+
 ## 패키지 구조
 
 ```
 src/main/java/com/guenbon/jochuckhub/
 ├── config/
-│   └── jwt/           # JwtTokenProvider, JwtAuthenticationFilter, JwtAuthenticationEntryPoint
+│   ├── JpaConfig.java         # JPAQueryFactory 빈 등록
+│   ├── SecurityConfig.java    # Spring Security, CSRF, CORS 설정
+│   └── jwt/                   # JwtTokenProvider, JwtAuthenticationFilter, JwtAuthenticationEntryPoint
 ├── controller/        # AuthController, MemberController, TeamController, MatchController
 │                      # MatchVoteController, MatchLineupController
 ├── service/           # MemberService, TeamService, MatchService, MatchVoteService
-│                      # MatchResultService, MatchLineupService, CustomUserDetailsService
+│                      # MatchResultService, MatchLineupService, KakaoAuthService, CustomUserDetailsService
 ├── repository/        # MemberRepository, TeamRepository, TeamMemberRepository, MatchRepository
 │                      # MatchVoteRepository, GoalRepository, MatchLineupEntryRepository
 ├── entity/            # Member, Team, TeamMember, Match, MatchVote, Goal, MatchLineupEntry
 │                      # Position(enum), TeamRole(enum), AttendStatus(enum), ActualAttendStatus(enum)
 ├── dto/
-│   ├── request/       # LoginRequest, SignUpRequest, CreateTeamRequest, CreateMatchRequest 등
+│   ├── request/       # UpdateMemberRequest, CreateTeamRequest, CreateMatchRequest 등
 │   └── response/      # LoginResponse, MemberResponse, TeamDetailResponse, MatchResponse 등
 └── exception/         # GlobalExceptionHandler, MemberNotFoundException, TeamNotFoundException, ForbiddenException
 ```
 
 ## 인증 흐름
 
-1. 프론트엔드가 `GET /api/auth/kakao?redirectUri=...` 또는 직접 카카오 URL로 사용자를 리다이렉트
-2. 사용자가 카카오 로그인 → 카카오가 `redirectUri?code=xxx`로 리다이렉트
-3. 프론트엔드가 `POST /api/auth/kakao { code, redirectUri }` 호출
-4. 서버: 인가코드 → 카카오 액세스 토큰 → 카카오 사용자 정보 → Member 조회/생성 → JWT 발급
-5. 응답: `{ accessToken, tokenType: "Bearer", memberId, isNewMember }`
-   - `isNewMember=true` 이면 프론트에서 포지션 설정 (`PUT /api/members/{id}`) 유도
-6. 이후 모든 요청: `Authorization: Bearer <token>` 헤더
+1. 프론트엔드가 `GET /api/auth/kakao`로 사용자를 리다이렉트
+2. 사용자가 카카오 로그인 → 카카오가 `GET /api/auth/kakao/callback?code=xxx`로 리다이렉트
+3. 서버: 인가코드 → 카카오 액세스 토큰 → 카카오 사용자 정보 → Member 조회/생성 → JWT 발급
+4. JWT를 `accessToken` **HttpOnly 쿠키**로 Set-Cookie → `kakao.frontend-redirect-uri`로 리다이렉트
+   - 신규 가입이면 `?newMember=true` 파라미터 포함
+5. 이후 모든 요청: 브라우저가 쿠키를 자동 포함 (`credentials: include`)
+   - `JwtAuthenticationFilter`에서 쿠키의 `accessToken`을 추출해 인증 처리
 
-공개 엔드포인트: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`
+공개 엔드포인트: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/test-login.html`
 
 ## 권한 체계
 
@@ -63,6 +97,7 @@ src/main/java/com/guenbon/jochuckhub/
 ## 도메인 규칙
 
 **Member**
+- `kakaoId` → DB 컬럼 `kakao_id`, `username`은 `"kakao_{kakaoId}"` 형식으로 자동 생성
 - `mainPosition`(1개) + `subPositions`(`Set<Position>`, 최대 3개, 중복 불가)
 - `@Audited` — Hibernate Envers로 변경 이력 추적
 
@@ -106,8 +141,8 @@ src/main/java/com/guenbon/jochuckhub/
 ### 인증
 | 메서드 | URL | 권한 |
 |--------|-----|------|
-| `GET` | `/api/auth/kakao?redirectUri=xxx` | 공개 (카카오 로그인 페이지로 리다이렉트) |
-| `POST` | `/api/auth/kakao` | 공개 (인가코드 → JWT 발급) |
+| `GET` | `/api/auth/kakao` | 공개 (카카오 로그인 페이지로 리다이렉트) |
+| `GET` | `/api/auth/kakao/callback?code=xxx` | 공개 (카카오 콜백 → JWT 쿠키 발급) |
 
 ### 회원
 | 메서드 | URL | 권한 |
@@ -158,8 +193,6 @@ src/main/java/com/guenbon/jochuckhub/
 ## 주요 DTO
 
 **요청 DTO**
-- `LoginRequest`: username, password
-- `SignUpRequest`: username, password, name, mainPosition, subPositions
 - `UpdateMemberRequest`: name, mainPosition, subPositions
 - `CreateTeamRequest`: name
 - `CreateVirtualTeamRequest`: name, myTeamId
@@ -171,7 +204,7 @@ src/main/java/com/guenbon/jochuckhub/
 - `SaveLineupRequest`: quarters[{quarter, players[{memberId, position}]}]
 
 **응답 DTO**
-- `LoginResponse`: accessToken, tokenType, memberId
+- `LoginResponse`: accessToken, tokenType, memberId, isNewMember
 - `MemberResponse`: id, username, name, mainPosition, subPositions
 - `TeamSummaryResponse`: id, name, virtual, memberCount
 - `TeamDetailResponse`: id, name, virtual, owner, managers[], memberCount, currentUserRole
@@ -197,19 +230,10 @@ Exception (기타)                  → 500  INTERNAL_SERVER_ERROR
 ## DB 설정
 
 - MySQL, 포트 3306, DB명 `jochuckhub`, `ddl-auto=create-drop` (개발용)
-- `spring.datasource.username=root`, `password=0000`
+- username/password는 `application-private.properties`에서 설정
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 ## 파일 관리
 
 - 새로 추가된 파일이 있으면 작업 후 git add 한다.
-- API 수정사항이 발생하면 이 파일도 함께 수정한다.
-
-## API_REFERENCE.md 관리 규칙
-
-- **API를 추가하거나 수정할 때마다** `API_REFERENCE.md`도 반드시 함께 업데이트한다.
-  - 엔드포인트 요약 테이블에 추가/수정
-  - 해당 섹션의 상세 설명 추가/수정
-- **작업 완료 후** `API_REFERENCE.md` 최상단의 `## 최근 작업 (CLAUDE CODE)` 섹션을 갱신한다.
-  - 방금 수행한 작업 설명을 맨 위에 추가하고, 목록이 3개를 초과하면 가장 오래된 항목을 제거하여 최대 3개를 유지한다.
-  - 형식: `- YYYY-MM-DD: <작업 설명> (예: POST /api/foo 추가, GET /api/bar 수정)`
+- API 수정사항이 발생하면 이 파일(CLAUDE.md)도 함께 수정한다.

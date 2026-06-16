@@ -1,14 +1,16 @@
 package com.guenbon.jochuckhub.controller;
 
-import com.guenbon.jochuckhub.dto.request.KakaoLoginRequest;
 import com.guenbon.jochuckhub.dto.response.LoginResponse;
 import com.guenbon.jochuckhub.service.KakaoAuthService;
-import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.net.URI;
 
 @RestController
@@ -21,28 +23,60 @@ public class AuthController {
     @Value("${kakao.client-id}")
     private String kakaoClientId;
 
+    @Value("${kakao.redirect-uri}")
+    private String kakaoRedirectUri;
+
+    @Value("${kakao.frontend-redirect-uri}")
+    private String frontendRedirectUri;
+
+    @Value("${jwt.expiration}")
+    private long jwtExpiration;
+
     /**
      * 카카오 로그인 페이지로 리다이렉트.
-     * 프론트엔드가 직접 URL을 구성할 수도 있고, 이 엔드포인트로 리다이렉트를 요청할 수도 있습니다.
-     * GET /api/auth/kakao?redirectUri=https://your-frontend.com/callback
+     * GET /api/auth/kakao
      */
     @GetMapping("/kakao")
-    public ResponseEntity<Void> kakaoLoginRedirect(@RequestParam String redirectUri) {
+    public ResponseEntity<Void> kakaoLoginRedirect() {
         String kakaoAuthUrl = "https://kauth.kakao.com/oauth/authorize"
                 + "?client_id=" + kakaoClientId
-                + "&redirect_uri=" + redirectUri
+                + "&redirect_uri=" + kakaoRedirectUri
                 + "&response_type=code";
         return ResponseEntity.status(302).location(URI.create(kakaoAuthUrl)).build();
     }
 
     /**
-     * 카카오 인가 코드로 로그인/회원가입 처리 후 JWT 반환.
-     * POST /api/auth/kakao
-     * Body: { "code": "...", "redirectUri": "..." }
+     * 카카오 인가코드 콜백. 카카오가 직접 리다이렉트하는 엔드포인트.
+     * GET /api/auth/kakao/callback?code=xxx
+     * 로그인 취소 시: ?error=access_denied&error_description=...
      */
-    @PostMapping("/kakao")
-    public ResponseEntity<LoginResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
-        LoginResponse response = kakaoAuthService.kakaoLogin(request.getCode(), request.getRedirectUri());
-        return ResponseEntity.ok(response);
+    @GetMapping("/kakao/callback")
+    public void kakaoCallback(
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String error,
+            HttpServletResponse response) throws IOException {
+
+        if (error != null) {
+            response.sendRedirect(frontendRedirectUri + "?error=login_cancelled");
+            return;
+        }
+
+        LoginResponse loginResponse = kakaoAuthService.kakaoLogin(code);
+
+        ResponseCookie jwtCookie = ResponseCookie.from("accessToken", loginResponse.getAccessToken())
+                .httpOnly(true)
+                .secure(false)          // 운영 환경(HTTPS)에서는 true 로 변경
+                .path("/")
+                .maxAge(jwtExpiration / 1000)
+                .sameSite("Lax")
+                .build();
+
+        response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
+
+        String redirectUrl = frontendRedirectUri;
+        if (loginResponse.isNewMember()) {
+            redirectUrl += "?newMember=true";
+        }
+        response.sendRedirect(redirectUrl);
     }
 }

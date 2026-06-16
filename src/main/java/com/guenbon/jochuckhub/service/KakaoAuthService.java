@@ -34,9 +34,12 @@ public class KakaoAuthService {
     @Value("${kakao.client-secret}")
     private String clientSecret;
 
+    @Value("${kakao.redirect-uri}")
+    private String kakaoRedirectUri;
+
     @Transactional
-    public LoginResponse kakaoLogin(String code, String redirectUri) {
-        String kakaoAccessToken = getKakaoAccessToken(code, redirectUri);
+    public LoginResponse kakaoLogin(String code) {
+        String kakaoAccessToken = getKakaoAccessToken(code);
         KakaoUserInfo userInfo = getKakaoUserInfo(kakaoAccessToken);
 
         String kakaoId = String.valueOf(userInfo.id());
@@ -61,12 +64,12 @@ public class KakaoAuthService {
         return new LoginResponse(token, member.getId(), isNewMember);
     }
 
-    private String getKakaoAccessToken(String code, String redirectUri) {
+    private String getKakaoAccessToken(String code) {
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
         params.add("grant_type", "authorization_code");
         params.add("client_id", clientId);
         params.add("client_secret", clientSecret);
-        params.add("redirect_uri", redirectUri);
+        params.add("redirect_uri", kakaoRedirectUri);
         params.add("code", code);
 
         KakaoTokenResponse response = restClient.post()
