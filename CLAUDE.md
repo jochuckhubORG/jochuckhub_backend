@@ -31,7 +31,7 @@ kakao.client-secret=<kakao_client_secret>
 
 카카오 클라이언트 ID/Secret은 [카카오 개발자 콘솔](https://developers.kakao.com)에서 발급받는다.
 
-Z`kakao.redirect-uri`(콜백 URL)는 콘솔의 "Redirect URI" 항목에 동일하게 등록해야 한다.
+`kakao.redirect-uri`(콜백 URL)는 콘솔의 "Redirect URI" 항목에 동일하게 등록해야 한다.
 
 ## 로컬 테스트 페이지
 
@@ -163,6 +163,8 @@ src/main/java/com/guenbon/jochuckhub/
 | `PUT` | `/api/members/{id}` | 인증(본인) |
 | `GET` | `/api/members/{id}/attendance-score?teamId=xxx` | 인증 |
 | `GET` | `/api/members/{id}/goal-records?teamId=xxx[&type=GOAL\|ASSIST][&sortDirection=ASC\|DESC][&opponentTeamId=yyy][&startDate=yyyy-MM-dd][&endDate=yyyy-MM-dd][&relatedMemberId=zzz]` | 인증 |
+
+> `relatedMemberId` 필터: `type=GOAL`이면 어시스트한 멤버, `type=ASSIST`이면 골을 넣은 멤버, `type` 없으면 해당 골에 관여한 멤버 전체
 
 ### 팀
 | 메서드 | URL | 권한 |
