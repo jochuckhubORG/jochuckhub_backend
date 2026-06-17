@@ -159,6 +159,7 @@ src/main/java/com/guenbon/jochuckhub/
 | 메서드 | URL | 권한 |
 |--------|-----|------|
 | `GET` | `/api/members` | 인증 |
+| `GET` | `/api/members/me` | 인증 (현재 로그인한 사용자 정보) |
 | `GET` | `/api/members/{id}` | 인증 |
 | `PUT` | `/api/members/{id}` | 인증(본인) |
 | `GET` | `/api/members/{id}/attendance-score?teamId=xxx` | 인증 |
