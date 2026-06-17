@@ -29,6 +29,12 @@ public class MemberController {
         return ResponseEntity.ok(memberService.getMembers());
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<MemberResponse> getMyProfile(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(memberService.getMember(userDetails.getMemberId()));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<MemberResponse> getMember(@PathVariable Long id) {
         return ResponseEntity.ok(memberService.getMember(id));
