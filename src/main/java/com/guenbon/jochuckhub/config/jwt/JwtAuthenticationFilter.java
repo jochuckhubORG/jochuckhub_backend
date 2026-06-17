@@ -45,12 +45,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String resolveToken(HttpServletRequest request) {
-        // 1. Authorization 헤더 우선 (Swagger, 모바일 등 헤더 방식 유지)
-        String bearerToken = request.getHeader("Authorization");
-        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        // 2. HttpOnly 쿠키 (브라우저 카카오 로그인 흐름)
+        // HttpOnly 쿠키에서 accessToken 추출 (카카오 로그인 흐름)
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
                 if ("accessToken".equals(cookie.getName())) {

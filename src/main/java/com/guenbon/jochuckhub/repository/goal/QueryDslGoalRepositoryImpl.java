@@ -38,7 +38,13 @@ public class QueryDslGoalRepositoryImpl implements QueryDslGoalRepository {
         if (startDate != null) builder.and(match.matchDate.goe(startDate));
         if (endDate != null) builder.and(match.matchDate.loe(endDate));
         if (relatedMemberId != null) {
-            builder.and(goal.scorer.id.eq(relatedMemberId).or(goal.assister.id.eq(relatedMemberId)));
+            if ("GOAL".equalsIgnoreCase(type)) {
+                builder.and(goal.assister.id.eq(relatedMemberId));
+            } else if ("ASSIST".equalsIgnoreCase(type)) {
+                builder.and(goal.scorer.id.eq(relatedMemberId));
+            } else {
+                builder.and(goal.scorer.id.eq(relatedMemberId).or(goal.assister.id.eq(relatedMemberId)));
+            }
         }
 
         OrderSpecifier<LocalDateTime> order = "ASC".equalsIgnoreCase(sortDirection)

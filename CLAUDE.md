@@ -9,16 +9,6 @@ Java 17 + Spring Boot 3.3.4 + Spring Security (JWT Stateless) + Spring Data JPA 
 
 Git remote: `https://github.com/jd99iam/jochuckhub.git`
 
-## 개발 명령어
-
-```bash
-# Windows
-gradlew.bat build
-gradlew.bat bootRun          # 포트 8080
-gradlew.bat test
-gradlew.bat test --tests "com.guenbon.jochuckhub.service.MemberServiceTest"
-```
-
 ## Git 제외 설정 파일
 
 아래 파일들은 `.gitignore`에 등록되어 있어 저장소에 포함되지 않는다. 새 환경에서 직접 생성해야 한다.
@@ -40,7 +30,8 @@ kakao.client-secret=<kakao_client_secret>
 ```
 
 카카오 클라이언트 ID/Secret은 [카카오 개발자 콘솔](https://developers.kakao.com)에서 발급받는다.
-`kakao.redirect-uri`(콜백 URL)는 콘솔의 "Redirect URI" 항목에 동일하게 등록해야 한다.
+
+Z`kakao.redirect-uri`(콜백 URL)는 콘솔의 "Redirect URI" 항목에 동일하게 등록해야 한다.
 
 ## 로컬 테스트 페이지
 
@@ -84,6 +75,26 @@ src/main/java/com/guenbon/jochuckhub/
    - `JwtAuthenticationFilter`에서 쿠키의 `accessToken`을 추출해 인증 처리
 
 공개 엔드포인트: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/test-login.html`
+
+## Spring Security 구성
+
+**세션**: `STATELESS` — 서버 측 세션 없음, JWT 쿠키로만 인증 유지
+
+**CSRF**: Cookie 기반 Double Submit 패턴
+- 서버가 `XSRF-TOKEN` 쿠키(HttpOnly=false) 발급
+- 브라우저가 이 값을 읽어 `X-XSRF-TOKEN` 요청 헤더로 포함해야 함
+- `GET` 등 안전한 메서드는 CSRF 토큰 불필요, `POST/PUT/PATCH/DELETE`는 필수
+
+**CORS**: `application.properties`의 `cors.allowed-origins` 값으로 허용 Origin 지정
+- `credentials: true` (쿠키 전송 허용)
+- `Set-Cookie` 헤더 노출 (`exposedHeaders`)
+- 허용 메서드: `GET, POST, PUT, PATCH, DELETE, OPTIONS`
+
+**필터 체인 순서**
+1. `JwtAuthenticationFilter` (커스텀) — `accessToken` 쿠키에서 JWT 추출 → 검증 → `SecurityContextHolder` 설정
+2. `UsernamePasswordAuthenticationFilter` (Spring 기본, 실질적으로 비활성)
+
+**인증 실패 처리**: `JwtAuthenticationEntryPoint` — 토큰 없거나 유효하지 않으면 401 반환
 
 ## 권한 체계
 

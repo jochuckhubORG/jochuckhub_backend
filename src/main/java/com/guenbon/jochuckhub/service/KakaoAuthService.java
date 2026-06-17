@@ -48,17 +48,20 @@ public class KakaoAuthService {
                 ? userInfo.kakaoAccount().profile().nickname()
                 : "사용자";
 
-        boolean isNewMember = !memberRepository.findByKakaoId(kakaoId).isPresent();
-
+        boolean[] isNewMemberRef = {false};
         Member member = memberRepository.findByKakaoId(kakaoId)
-                .orElseGet(() -> memberRepository.save(
-                        Member.builder()
-                                .kakaoId(kakaoId)
-                                .name(nickname)
-                                .mainPosition(Position.GK)
-                                .subPositions(Collections.emptySet())
-                                .build()
-                ));
+                .orElseGet(() -> {
+                    isNewMemberRef[0] = true;
+                    return memberRepository.save(
+                            Member.builder()
+                                    .kakaoId(kakaoId)
+                                    .name(nickname)
+                                    .mainPosition(Position.GK)
+                                    .subPositions(Collections.emptySet())
+                                    .build()
+                    );
+                });
+        boolean isNewMember = isNewMemberRef[0];
 
         String token = jwtTokenProvider.generateToken(member.getUsername());
         return new LoginResponse(token, member.getId(), isNewMember);
