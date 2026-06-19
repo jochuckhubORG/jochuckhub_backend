@@ -41,7 +41,8 @@ public class AuthController {
         String kakaoAuthUrl = "https://kauth.kakao.com/oauth/authorize"
                 + "?client_id=" + kakaoClientId
                 + "&redirect_uri=" + kakaoRedirectUri
-                + "&response_type=code";
+                + "&response_type=code"
+                + "&scope=talk_message";
         return ResponseEntity.status(302).location(URI.create(kakaoAuthUrl)).build();
     }
 

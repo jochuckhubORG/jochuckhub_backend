@@ -80,10 +80,7 @@ src/main/java/com/guenbon/jochuckhub/
 
 **세션**: `STATELESS` — 서버 측 세션 없음, JWT 쿠키로만 인증 유지
 
-**CSRF**: Cookie 기반 Double Submit 패턴
-- 서버가 `XSRF-TOKEN` 쿠키(HttpOnly=false) 발급
-- 브라우저가 이 값을 읽어 `X-XSRF-TOKEN` 요청 헤더로 포함해야 함
-- `GET` 등 안전한 메서드는 CSRF 토큰 불필요, `POST/PUT/PATCH/DELETE`는 필수
+**CSRF**: 비활성화 — JWT 쿠키 기반 Stateless REST API이므로 불필요
 
 **CORS**: `application.properties`의 `cors.allowed-origins` 값으로 허용 Origin 지정
 - `credentials: true` (쿠키 전송 허용)
@@ -203,6 +200,7 @@ src/main/java/com/guenbon/jochuckhub/
 | `POST` | `/api/matches/{matchId}/lineup` | OWNER/MANAGER (자동 생성, 투표 마감 후, 참석 14~20명) |
 | `PUT` | `/api/matches/{matchId}/lineup` | OWNER/MANAGER (수동 저장) |
 | `GET` | `/api/matches/{matchId}/lineup` | 인증 |
+| `POST` | `/api/matches/{matchId}/lineup/announce` | OWNER/MANAGER (라인업 카카오톡 발표, talk_message 동의 필요) |
 
 ## 주요 DTO
 

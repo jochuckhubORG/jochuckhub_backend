@@ -61,6 +61,7 @@ public class KakaoAuthService {
                                     .build()
                     );
                 });
+        member.updateKakaoAccessToken(kakaoAccessToken);
         boolean isNewMember = isNewMemberRef[0];
 
         String token = jwtTokenProvider.generateToken(member.getUsername());

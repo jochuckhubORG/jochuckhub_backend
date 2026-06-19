@@ -10,15 +10,18 @@ import com.guenbon.jochuckhub.repository.MatchVoteRepository;
 import com.guenbon.jochuckhub.repository.MemberRepository;
 import com.guenbon.jochuckhub.repository.TeamMemberRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class MatchLineupService {
 
     private static final int QUARTERS = 4;
@@ -36,6 +39,8 @@ public class MatchLineupService {
     private final MemberRepository memberRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final MatchLineupEntryRepository lineupEntryRepository;
+    private final LineupImageService lineupImageService;
+    private final KakaoMessageService kakaoMessageService;
 
     @Transactional
     public MatchLineupResponse generateLineup(Long matchId, Long requesterId) {
@@ -296,6 +301,88 @@ public class MatchLineupService {
                 .toList();
 
         return new MatchLineupResponse(matchId, quarters);
+    }
+
+    /**
+     * 완성된 라인업을 팀원 전체에게 카카오톡으로 발표한다.
+     *
+     * <ol>
+     *   <li>쿼터별 라인업 이미지 생성</li>
+     *   <li>요청자의 카카오 토큰으로 이미지 업로드 (1회)</li>
+     *   <li>팀원 각자의 카카오 토큰으로 나에게 보내기 전송</li>
+     * </ol>
+     *
+     * 카카오 토큰이 없는 팀원은 건너뛰며, 개별 전송 실패는 경고 로그 후 계속 진행한다.
+     */
+    public record AnnounceResult(int sentCount, int skippedCount) {}
+
+    public AnnounceResult announceLineup(Long matchId, Long requesterId) {
+        Match match = findMatch(matchId);
+
+        // OWNER/MANAGER 권한 확인
+        if (!teamMemberRepository.existsByTeamIdAndMemberIdAndRoleIn(
+                match.getHomeTeam().getId(), requesterId,
+                List.of(TeamRole.OWNER, TeamRole.MANAGER))) {
+            throw new ForbiddenException("OWNER 또는 MANAGER만 라인업을 발표할 수 있습니다.");
+        }
+
+        // 라인업 조회
+        List<MatchLineupEntry> entries = lineupEntryRepository.findAllByMatchId(matchId);
+        if (entries.isEmpty()) {
+            throw new IllegalArgumentException("라인업이 아직 생성되지 않았습니다.");
+        }
+        MatchLineupResponse lineup = buildResponse(matchId, entries);
+
+        // 요청자의 카카오 액세스 토큰 확인
+        Member requester = memberRepository.findById(requesterId)
+                .orElseThrow(() -> new IllegalArgumentException("요청자를 찾을 수 없습니다."));
+        if (requester.getKakaoAccessToken() == null) {
+            throw new IllegalArgumentException("카카오 연동 정보가 없습니다. 다시 로그인 후 시도해 주세요.");
+        }
+
+        // 매치 제목 (이미지 헤더에 사용)
+        String matchTitle = match.getHomeTeam().getName() + " vs " + match.getOpponentTeam().getName();
+
+        // 쿼터별 이미지 생성 및 업로드
+        List<String> imageUrls = new ArrayList<>();
+        for (MatchLineupResponse.QuarterLineup quarterLineup : lineup.getQuarters()) {
+            try {
+                byte[] imgBytes = lineupImageService.generateQuarterImage(
+                        quarterLineup.getQuarter(), quarterLineup.getPlayers(), matchTitle);
+                String url = kakaoMessageService.uploadImage(requester.getKakaoAccessToken(), imgBytes);
+                imageUrls.add(url);
+            } catch (IOException e) {
+                throw new IllegalStateException(quarterLineup.getQuarter() + "쿼터 이미지 생성 실패", e);
+            }
+        }
+
+        // 팀원 전체에게 메시지 전송
+        List<TeamMember> teamMembers = teamMemberRepository.findAllByTeamId(match.getHomeTeam().getId());
+        int sent = 0;
+        for (TeamMember tm : teamMembers) {
+            String token = tm.getMember().getKakaoAccessToken();
+            if (token == null) {
+                log.debug("카카오 토큰 없음, 건너뜀: memberId={}", tm.getMember().getId());
+                continue;
+            }
+            try {
+                for (int i = 0; i < imageUrls.size(); i++) {
+                    MatchLineupResponse.QuarterLineup q = lineup.getQuarters().get(i);
+                    kakaoMessageService.sendSelfMessage(
+                            token,
+                            imageUrls.get(i),
+                            q.getQuarter() + "쿼터 라인업",
+                            matchTitle
+                    );
+                }
+                sent++;
+            } catch (Exception e) {
+                log.warn("카카오 메시지 전송 실패 (memberId={}): {}", tm.getMember().getId(), e.getMessage());
+            }
+        }
+        int skipped = teamMembers.size() - sent;
+        log.info("라인업 발표 완료: matchId={}, 전송 성공={}/{}명 (건너뜀={}명)", matchId, sent, teamMembers.size(), skipped);
+        return new AnnounceResult(sent, skipped);
     }
 
     private Match findMatch(Long matchId) {

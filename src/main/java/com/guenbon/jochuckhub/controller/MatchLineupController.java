@@ -4,6 +4,7 @@ import com.guenbon.jochuckhub.dto.CustomUserDetails;
 import com.guenbon.jochuckhub.dto.request.SaveLineupRequest;
 import com.guenbon.jochuckhub.dto.response.MatchLineupResponse;
 import com.guenbon.jochuckhub.service.MatchLineupService;
+import com.guenbon.jochuckhub.service.MatchLineupService.AnnounceResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,5 +46,16 @@ public class MatchLineupController {
     @Operation(summary = "라인업 조회")
     public ResponseEntity<MatchLineupResponse> getLineup(@PathVariable Long matchId) {
         return ResponseEntity.ok(matchLineupService.getLineup(matchId));
+    }
+
+    @PostMapping("/announce")
+    @Operation(summary = "라인업 발표 (카카오톡 전송)",
+            description = "완성된 라인업을 팀원 전체에게 카카오톡 메시지로 전송합니다. " +
+                    "각 쿼터 라인업 이미지 4장이 나에게 보내기 방식으로 각 팀원에게 전달됩니다. " +
+                    "OWNER/MANAGER만 가능하며, 카카오 로그인 상태인 팀원에게만 전송됩니다.")
+    public ResponseEntity<MatchLineupService.AnnounceResult> announceLineup(
+            @PathVariable Long matchId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(matchLineupService.announceLineup(matchId, userDetails.getMemberId()));
     }
 }

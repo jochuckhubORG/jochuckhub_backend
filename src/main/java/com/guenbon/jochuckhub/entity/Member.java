@@ -42,6 +42,10 @@ public class Member {
     @Column(name = "position")
     private Set<Position> subPositions = new HashSet<>();
 
+    @NotAudited
+    @Column(length = 500)
+    private String kakaoAccessToken;
+
     @Builder
     public Member(String kakaoId, String name,
                   Position mainPosition, Set<Position> subPositions) {
@@ -56,5 +60,9 @@ public class Member {
         this.name = name;
         this.mainPosition = mainPosition;
         this.subPositions = subPositions != null ? subPositions : new HashSet<>();
+    }
+
+    public void updateKakaoAccessToken(String token) {
+        this.kakaoAccessToken = token;
     }
 }
