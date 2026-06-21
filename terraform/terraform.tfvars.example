@@ -1,0 +1,11 @@
+aws_region    = "ap-northeast-2"
+key_pair_name = "my-key"  # AWS 콘솔 > EC2 > 키 페어에서 미리 생성
+
+db_password         = "변경하세요"
+jwt_secret          = "base64로_인코딩된_256비트_이상_키"
+kakao_client_id     = "카카오_REST_API_키"
+kakao_client_secret = "카카오_Client_Secret"
+
+# terraform apply 후 출력되는 EC2 IP로 교체하세요
+kakao_redirect_uri          = "http://<EC2_IP>:8080/api/auth/kakao/callback"
+kakao_frontend_redirect_uri = "http://<EC2_IP>:8080/test-login.html"

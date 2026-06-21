@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terraform 가이드 — JochuckHub</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; line-height: 1.7; }
+
+    header {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      color: #fff;
+      padding: 40px 48px;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 6px; }
+    header p { color: #aab; font-size: 0.95rem; }
+
+    nav {
+      background: #fff;
+      border-bottom: 1px solid #dde;
+      padding: 14px 48px;
+      display: flex;
+      gap: 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    nav a { color: #4a6cf7; text-decoration: none; font-size: 0.9rem; font-weight: 500; }
+    nav a:hover { text-decoration: underline; }
+
+    main { max-width: 960px; margin: 40px auto; padding: 0 24px 80px; }
+
+    section { margin-bottom: 60px; }
+    h2 {
+      font-size: 1.45rem;
+      color: #1a1a2e;
+      border-left: 4px solid #4a6cf7;
+      padding-left: 14px;
+      margin-bottom: 24px;
+    }
+    h3 { font-size: 1.1rem; color: #333; margin: 24px 0 10px; }
+    p { margin-bottom: 12px; color: #444; }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .flow {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 20px 0;
+    }
+    .flow-box {
+      background: #eef1ff;
+      border: 1.5px solid #4a6cf7;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      text-align: center;
+    }
+    .flow-box.gray { background: #f4f4f4; border-color: #bbb; color: #555; }
+    .flow-box.green { background: #e8f8f0; border-color: #27ae60; color: #1a6e3c; }
+    .flow-box.orange { background: #fff4e6; border-color: #e67e22; color: #7d4e0a; }
+    .arrow { color: #4a6cf7; font-size: 1.2rem; font-weight: bold; }
+
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th { background: #1a1a2e; color: #fff; padding: 10px 14px; text-align: left; font-size: 0.88rem; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eee; font-size: 0.88rem; vertical-align: top; }
+    tr:hover td { background: #f8f9ff; }
+
+    code {
+      background: #f0f2f5;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-family: 'Consolas', monospace;
+      font-size: 0.85rem;
+      color: #c0392b;
+    }
+
+    pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+      font-family: 'Consolas', monospace;
+      font-size: 0.83rem;
+      line-height: 1.6;
+      margin: 14px 0;
+    }
+    pre .comment { color: #6272a4; }
+    pre .key { color: #89dceb; }
+    pre .val { color: #a6e3a1; }
+    pre .str { color: #f9e2af; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-green { background: #dcfce7; color: #15803d; }
+    .badge-orange { background: #ffedd5; color: #c2410c; }
+
+    .tip {
+      background: #fffbe6;
+      border-left: 4px solid #f0a500;
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      font-size: 0.88rem;
+      color: #5a4000;
+    }
+    .tip strong { color: #b07800; }
+
+    .note {
+      background: #e8f0fe;
+      border-left: 4px solid #4a6cf7;
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      font-size: 0.88rem;
+      color: #1a3a7a;
+    }
+
+    .file-header {
+      background: #2d2d3f;
+      color: #89dceb;
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 8px 8px 0 0;
+      margin-bottom: 0;
+      font-family: 'Consolas', monospace;
+    }
+    .file-header + pre { border-radius: 0 0 8px 8px; margin-top: 0; }
+
+    ul { padding-left: 22px; margin-bottom: 12px; }
+    ul li { margin-bottom: 6px; font-size: 0.9rem; color: #444; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Terraform 가이드 — JochuckHub 백엔드 배포</h1>
+  <p>Terraform 개념 / 파일 구조 / 배포 플로우 정리</p>
+</header>
+
+<nav>
+  <a href="#q1">Q1. 플로우</a>
+  <a href="#q2">Q2. AWS CLI vs Terraform</a>
+  <a href="#q3">Q3. 파일 분석</a>
+  <a href="#deploy">배포 순서</a>
+</nav>
+
+<main>
+
+  <!-- ================================================================ -->
+  <section id="q1">
+    <h2>Q1. Terraform은 "인프라 생성"만, 배포는 별도 수단으로</h2>
+
+    <div class="card">
+      <h3>역할 분리</h3>
+      <table>
+        <tr>
+          <th>도구</th>
+          <th>담당 영역</th>
+          <th>예시</th>
+        </tr>
+        <tr>
+          <td><strong>Terraform</strong></td>
+          <td>인프라 생성 · 관리</td>
+          <td>EC2 만들기, Security Group 설정, MySQL 설치 스크립트 주입</td>
+        </tr>
+        <tr>
+          <td><strong>CI/CD<br>(GitHub Actions, Jenkins 등)</strong></td>
+          <td>코드 빌드 · 배포</td>
+          <td>JAR 빌드 → EC2에 전송 → 서비스 재시작</td>
+        </tr>
+        <tr>
+          <td><strong>scp / SSH (수동)</strong></td>
+          <td>간단한 파일 전송</td>
+          <td>직접 JAR 올리고 systemctl restart</td>
+        </tr>
+      </table>
+      <div class="note">
+        Terraform은 "서버라는 땅을 만드는 것"이고, 배포는 "그 땅 위에 건물(앱)을 올리는 것"입니다.
+        두 작업은 완전히 분리됩니다.
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>전체 플로우</h3>
+      <div class="flow">
+        <div class="flow-box">terraform apply<br><small>EC2 생성</small></div>
+        <span class="arrow">→</span>
+        <div class="flow-box green">EC2 부팅<br><small>user_data.sh 실행<br>MySQL + Java 설치</small></div>
+        <span class="arrow">→</span>
+        <div class="flow-box orange">JAR 빌드<br><small>./gradlew bootJar</small></div>
+        <span class="arrow">→</span>
+        <div class="flow-box orange">scp 전송<br><small>app.jar → EC2</small></div>
+        <span class="arrow">→</span>
+        <div class="flow-box green">앱 시작<br><small>systemctl start</small></div>
+      </div>
+
+      <h3 style="margin-top:20px;">지금 구성에서 Terraform이 해주는 것 / 안 해주는 것</h3>
+      <table>
+        <tr><th>Terraform이 해주는 것 (자동)</th><th>직접 해야 하는 것 (수동)</th></tr>
+        <tr>
+          <td>
+            EC2 인스턴스 생성<br>
+            Security Group (22/8080 포트 열기)<br>
+            Java 17 설치<br>
+            MySQL 설치 · DB 생성 · 유저 생성<br>
+            환경변수 파일 (<code>app.env</code>) 작성<br>
+            systemd 서비스 파일 등록
+          </td>
+          <td>
+            JAR 빌드 (<code>./gradlew bootJar</code>)<br>
+            JAR를 EC2로 전송 (<code>scp</code>)<br>
+            앱 서비스 시작 (<code>systemctl start</code>)<br>
+            카카오 콘솔에 Redirect URI 등록<br>
+            재배포 시 위 과정 반복
+          </td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section id="q2">
+    <h2>Q2. AWS CLI vs Terraform — 관계와 차이</h2>
+
+    <div class="card">
+      <table>
+        <tr><th></th><th>AWS CLI</th><th>Terraform</th></tr>
+        <tr>
+          <td><strong>역할</strong></td>
+          <td>AWS API를 명령어로 직접 호출</td>
+          <td>AWS 리소스를 코드로 선언하고 관리</td>
+        </tr>
+        <tr>
+          <td><strong>설치 이유</strong></td>
+          <td>AWS 인증 정보(<code>~/.aws/credentials</code>) 저장 및 API 호출</td>
+          <td>Terraform 명령어 사용</td>
+        </tr>
+        <tr>
+          <td><strong>관계</strong></td>
+          <td colspan="2">Terraform은 내부적으로 AWS SDK를 직접 사용.<br>
+            AWS CLI와는 별개지만, <code>aws configure</code>로 저장한<br>
+            인증 정보(<code>~/.aws/credentials</code>)는 <strong>공유</strong>합니다.</td>
+        </tr>
+      </table>
+
+      <div class="note" style="margin-top:16px;">
+        <strong>정확히는:</strong> <code>terraform apply</code>를 실행하면
+        Terraform이 <strong>직접 AWS API를 호출</strong>합니다.
+        AWS CLI를 거치는 게 아니라, <code>aws configure</code>로 저장된
+        <strong>인증 키 파일만 공유</strong>해서 사용합니다.
+      </div>
+
+      <div class="flow" style="margin-top:20px;">
+        <div class="flow-box gray">terraform apply</div>
+        <span class="arrow">→</span>
+        <div class="flow-box gray">~/.aws/credentials<br><small>인증키 읽기</small></div>
+        <span class="arrow">→</span>
+        <div class="flow-box">AWS API<br><small>(직접 호출)</small></div>
+        <span class="arrow">→</span>
+        <div class="flow-box green">EC2 생성됨</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section id="q3">
+    <h2>Q3. terraform/ 파일별 역할과 구성요소 분석</h2>
+
+    <!-- main.tf -->
+    <div class="card">
+      <h3>main.tf <span class="badge badge-blue">핵심 파일</span></h3>
+      <p>실제로 <strong>AWS에 만들 리소스들을 정의</strong>하는 파일. "EC2 만들어라", "Security Group 만들어라" 같은 선언을 합니다.</p>
+
+      <div class="file-header">📄 main.tf — 블록별 설명</div>
+      <pre><span class="comment"># ① Terraform 자체 설정</span>
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"   <span class="comment"># AWS 플러그인 출처</span>
+      version = "~> 5.0"          <span class="comment"># 5.x 버전 사용</span>
+    }
+  }
+}
+
+<span class="comment"># ② 어느 AWS 리전에 만들지</span>
+provider "aws" {
+  region = var.aws_region         <span class="comment"># variables.tf의 변수 참조</span>
+}
+
+<span class="comment"># ③ 데이터 소스: 기존에 있는 것을 "조회"만 함 (생성 X)</span>
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true              <span class="comment"># 가장 최신 AMI</span>
+  owners      = ["amazon"]       <span class="comment"># Amazon 공식 이미지만</span>
+  filter { ... }                  <span class="comment"># Amazon Linux 2023 필터</span>
+}
+
+<span class="comment"># ④ 리소스: 실제로 AWS에 "생성"할 것들</span>
+resource "aws_security_group" "app_sg" {
+  name = "jochuckhub-sg"
+  ingress { from_port = 22  ... } <span class="comment"># SSH 허용</span>
+  ingress { from_port = 8080 ... }<span class="comment"># Spring Boot 포트 허용</span>
+  egress  { ... }                 <span class="comment"># 아웃바운드 전체 허용</span>
+}
+
+resource "aws_instance" "app" {
+  ami           = data.aws_ami... <span class="comment"># 위에서 조회한 AMI ID 사용</span>
+  instance_type = "t2.micro"
+  key_name      = var.key_pair_name
+  vpc_security_group_ids = [aws_security_group.app_sg.id]
+  user_data = templatefile(       <span class="comment"># EC2 부팅 시 실행할 스크립트</span>
+    "user_data.sh", { ... }       <span class="comment"># 변수 주입</span>
+  )
+}</pre>
+    </div>
+
+    <!-- variables.tf -->
+    <div class="card">
+      <h3>variables.tf <span class="badge badge-green">변수 선언</span></h3>
+      <p>"이런 변수들을 입력받겠다"고 선언하는 파일. 실제 값은 <code>terraform.tfvars</code>에서 넣습니다.</p>
+
+      <div class="file-header">📄 variables.tf</div>
+      <pre>variable "aws_region" {
+  description = "AWS 리전"        <span class="comment"># 설명 (선택)</span>
+  type        = string            <span class="comment"># 타입 검증</span>
+  default     = "ap-northeast-2" <span class="comment"># 기본값 (tfvars 없어도 됨)</span>
+}
+
+variable "db_password" {
+  description = "MySQL 비밀번호"
+  type        = string
+  sensitive   = true             <span class="comment"># 로그에 값이 출력되지 않음</span>
+}</pre>
+
+      <table>
+        <tr><th>변수명</th><th>설명</th><th>어디서 사용?</th></tr>
+        <tr><td><code>aws_region</code></td><td>AWS 리전 (기본: 서울)</td><td>provider 블록</td></tr>
+        <tr><td><code>key_pair_name</code></td><td>EC2 SSH 키페어 이름</td><td>aws_instance</td></tr>
+        <tr><td><code>db_password</code></td><td>MySQL 비밀번호</td><td>user_data.sh로 주입</td></tr>
+        <tr><td><code>jwt_secret</code></td><td>JWT 서명 키</td><td>user_data.sh → app.env</td></tr>
+        <tr><td><code>kakao_client_id</code></td><td>카카오 REST API 키</td><td>user_data.sh → app.env</td></tr>
+        <tr><td><code>kakao_client_secret</code></td><td>카카오 Client Secret</td><td>user_data.sh → app.env</td></tr>
+        <tr><td><code>kakao_redirect_uri</code></td><td>카카오 OAuth 콜백 URL</td><td>user_data.sh → app.env</td></tr>
+        <tr><td><code>kakao_frontend_redirect_uri</code></td><td>로그인 후 이동 URL</td><td>user_data.sh → app.env</td></tr>
+      </table>
+    </div>
+
+    <!-- terraform.tfvars -->
+    <div class="card">
+      <h3>terraform.tfvars <span class="badge badge-orange">실제 값 입력</span></h3>
+      <p>variables.tf에서 선언한 변수의 <strong>실제 값</strong>을 넣는 파일. 민감 정보가 담기므로 <code>.gitignore</code>에 등록되어 있습니다.</p>
+
+      <div class="file-header">📄 terraform.tfvars (예시)</div>
+      <pre><span class="key">aws_region</span>    = <span class="str">"ap-northeast-2"</span>
+<span class="key">key_pair_name</span> = <span class="str">"my-key"</span>          <span class="comment"># AWS 콘솔에서 만든 키페어 이름</span>
+
+<span class="key">db_password</span>         = <span class="str">"mypassword123"</span>
+<span class="key">jwt_secret</span>          = <span class="str">"base64인코딩된키..."</span>
+<span class="key">kakao_client_id</span>     = <span class="str">"카카오REST키"</span>
+<span class="key">kakao_client_secret</span> = <span class="str">"카카오시크릿"</span>
+
+<span class="key">kakao_redirect_uri</span>          = <span class="str">"http://43.201.xx.xx:8080/api/auth/kakao/callback"</span>
+<span class="key">kakao_frontend_redirect_uri</span> = <span class="str">"http://43.201.xx.xx:8080/test-login.html"</span></pre>
+    </div>
+
+    <!-- outputs.tf -->
+    <div class="card">
+      <h3>outputs.tf <span class="badge badge-blue">출력값</span></h3>
+      <p><code>terraform apply</code> 완료 후 터미널에 출력되는 값들. EC2 IP 등 이후 작업에 필요한 정보를 확인하기 위해 사용합니다.</p>
+
+      <div class="file-header">📄 outputs.tf</div>
+      <pre>output "ec2_public_ip" {
+  value = aws_instance.app.public_ip  <span class="comment"># 생성된 EC2의 IP</span>
+}
+output "app_url" {
+  value = "http://${aws_instance.app.public_ip}:8080"
+}
+output "ssh_command" {
+  value = "ssh -i ~/.ssh/my-key.pem ec2-user@..."
+}</pre>
+      <p>apply 완료 시 이런 식으로 터미널에 출력됩니다:</p>
+      <pre>ec2_public_ip = "43.201.xx.xx"
+app_url       = "http://43.201.xx.xx:8080"
+ssh_command   = "ssh -i ~/.ssh/my-key.pem ec2-user@43.201.xx.xx"</pre>
+    </div>
+
+    <!-- user_data.sh -->
+    <div class="card">
+      <h3>user_data.sh <span class="badge badge-orange">EC2 초기화 스크립트</span></h3>
+      <p>EC2가 <strong>처음 부팅될 때 딱 1번</strong> 자동 실행되는 bash 스크립트. Terraform이 이 파일을 EC2에 주입합니다.</p>
+
+      <table>
+        <tr><th>실행 단계</th><th>내용</th></tr>
+        <tr>
+          <td>① Java 17 설치</td>
+          <td><code>dnf install java-17-amazon-corretto-headless</code></td>
+        </tr>
+        <tr>
+          <td>② MySQL 설치 · 시작</td>
+          <td><code>dnf install mysql-server</code> → <code>systemctl start mysqld</code></td>
+        </tr>
+        <tr>
+          <td>③ DB · 유저 생성</td>
+          <td><code>jochuckhub</code> 데이터베이스, <code>jochuck</code> 유저 생성</td>
+        </tr>
+        <tr>
+          <td>④ 환경변수 파일 생성</td>
+          <td><code>/opt/jochuckhub/app.env</code> — DB URL, JWT 키, 카카오 키 등</td>
+        </tr>
+        <tr>
+          <td>⑤ systemd 서비스 등록</td>
+          <td><code>/etc/systemd/system/jochuckhub.service</code> 작성<br>JAR 업로드 후 <code>systemctl start jochuckhub</code>으로 앱 시작</td>
+        </tr>
+      </table>
+
+      <div class="tip">
+        <strong>참고:</strong> user_data.sh 안에 <code>${변수명}</code> 형태는 Terraform이 값을 채워 넣는 템플릿 변수입니다.
+        systemd 서비스 파일 안에 쓰인 <code>$${ }</code>는 실제 쉘 변수(<code>${ }</code>)로 변환됩니다.
+        (<code>$$</code> → Terraform 템플릿에서 <code>$</code> 리터럴 이스케이프)
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section id="deploy">
+    <h2>배포 전체 순서 (현재 구성 기준)</h2>
+
+    <div class="card">
+      <table>
+        <tr><th>단계</th><th>명령어 / 행동</th><th>어디서</th></tr>
+        <tr>
+          <td>① 변수 파일 작성</td>
+          <td><code>copy terraform.tfvars.example terraform.tfvars</code><br>값 채워 넣기</td>
+          <td>내 PC</td>
+        </tr>
+        <tr>
+          <td>② 인프라 생성</td>
+          <td><code>terraform init</code><br><code>terraform plan</code><br><code>terraform apply</code></td>
+          <td>내 PC<br>(terraform/ 폴더 안)</td>
+        </tr>
+        <tr>
+          <td>③ EC2 IP 확인</td>
+          <td>apply 출력에서 <code>ec2_public_ip</code> 메모</td>
+          <td>터미널</td>
+        </tr>
+        <tr>
+          <td>④ 카카오 콘솔 등록</td>
+          <td>Redirect URI에 <code>http://&lt;IP&gt;:8080/api/auth/kakao/callback</code> 추가</td>
+          <td>브라우저</td>
+        </tr>
+        <tr>
+          <td>⑤ JAR 빌드</td>
+          <td><code>./gradlew bootJar</code></td>
+          <td>내 PC<br>(프로젝트 루트)</td>
+        </tr>
+        <tr>
+          <td>⑥ JAR 전송</td>
+          <td><code>scp -i ~/.ssh/my-key.pem build/libs/jochuckhub-0.0.1-SNAPSHOT.jar ec2-user@&lt;IP&gt;:/opt/jochuckhub/app.jar</code></td>
+          <td>내 PC</td>
+        </tr>
+        <tr>
+          <td>⑦ 앱 시작</td>
+          <td><code>ssh -i ~/.ssh/my-key.pem ec2-user@&lt;IP&gt;</code><br><code>sudo systemctl start jochuckhub</code><br><code>sudo journalctl -u jochuckhub -f</code></td>
+          <td>EC2 (SSH 접속 후)</td>
+        </tr>
+        <tr>
+          <td>⑧ 확인</td>
+          <td>브라우저에서 <code>http://&lt;IP&gt;:8080/test-login.html</code></td>
+          <td>브라우저</td>
+        </tr>
+        <tr>
+          <td>⑨ 종료 (비용 0)</td>
+          <td><code>terraform destroy</code></td>
+          <td>내 PC<br>(terraform/ 폴더 안)</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>
