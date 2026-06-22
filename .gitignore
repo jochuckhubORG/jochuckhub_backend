@@ -44,7 +44,6 @@ src/main/resources/application-private.properties
 
 ### Terraform ###
 terraform/.terraform/
-terraform/.terraform.lock.hcl
 terraform/terraform.tfvars
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
