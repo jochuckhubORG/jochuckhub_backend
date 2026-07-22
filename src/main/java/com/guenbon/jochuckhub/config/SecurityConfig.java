@@ -3,6 +3,9 @@ package com.guenbon.jochuckhub.config;
 import com.guenbon.jochuckhub.config.jwt.JwtAuthenticationEntryPoint;
 import com.guenbon.jochuckhub.config.jwt.JwtAuthenticationFilter;
 import com.guenbon.jochuckhub.config.jwt.JwtTokenProvider;
+import com.guenbon.jochuckhub.config.security.RestAccessDeniedHandler;
+import com.guenbon.jochuckhub.config.security.SecurityEventLogger;
+import com.guenbon.jochuckhub.config.security.SpaCsrfTokenRequestHandler;
 import com.guenbon.jochuckhub.service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +16,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -27,6 +31,8 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final SecurityEventLogger securityEventLogger;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
 
     @Value("${cors.allowed-origins}")
     private String allowedOrigins;
@@ -34,8 +40,10 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CSRF 비활성화: JWT 쿠키 기반 Stateless REST API이므로 불필요
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
+                )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -51,9 +59,10 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(restAccessDeniedHandler)
                 )
                 .addFilterBefore(
-                        new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailsService),
+                        new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailsService, securityEventLogger),
                         UsernamePasswordAuthenticationFilter.class
                 );
 

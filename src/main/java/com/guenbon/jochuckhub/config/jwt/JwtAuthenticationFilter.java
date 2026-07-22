@@ -1,7 +1,12 @@
 package com.guenbon.jochuckhub.config.jwt;
 
+import com.guenbon.jochuckhub.config.security.SecurityEventLogger;
 import com.guenbon.jochuckhub.dto.CustomUserDetails;
 import com.guenbon.jochuckhub.service.CustomUserDetailsService;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -20,6 +25,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
+    private final SecurityEventLogger securityEventLogger;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -35,9 +41,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     SecurityContextHolder.getContext().setAuthentication(auth);
+                    securityEventLogger.jwtAuthenticationSucceeded(
+                            username, request.getMethod(), request.getRequestURI());
                 }
+            } catch (ExpiredJwtException e) {
+                SecurityContextHolder.clearContext();
+                logFailure("expired", request);
+            } catch (SignatureException e) {
+                SecurityContextHolder.clearContext();
+                logFailure("invalid_signature", request);
+            } catch (MalformedJwtException e) {
+                SecurityContextHolder.clearContext();
+                logFailure("malformed", request);
+            } catch (UnsupportedJwtException e) {
+                SecurityContextHolder.clearContext();
+                logFailure("unsupported", request);
+            } catch (IllegalArgumentException e) {
+                SecurityContextHolder.clearContext();
+                logFailure("invalid", request);
             } catch (Exception e) {
                 SecurityContextHolder.clearContext();
+                logFailure("authentication_error", request);
             }
         }
 
@@ -54,5 +78,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
         return null;
+    }
+
+    private void logFailure(String reason, HttpServletRequest request) {
+        securityEventLogger.jwtAuthenticationFailed(reason, request.getMethod(), request.getRequestURI());
     }
 }

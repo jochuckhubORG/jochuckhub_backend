@@ -1,14 +1,21 @@
 package com.guenbon.jochuckhub.controller;
 
 import com.guenbon.jochuckhub.dto.response.LoginResponse;
+import com.guenbon.jochuckhub.exception.KakaoAuthenticationException;
 import com.guenbon.jochuckhub.service.KakaoAuthService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.net.URI;
@@ -16,7 +23,10 @@ import java.net.URI;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
+
+    private static final String KAKAO_AUTHORIZE_URL = "https://kauth.kakao.com/oauth/authorize";
 
     private final KakaoAuthService kakaoAuthService;
 
@@ -32,52 +42,65 @@ public class AuthController {
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
-    /**
-     * 카카오 로그인 페이지로 리다이렉트.
-     * GET /api/auth/kakao
-     */
     @GetMapping("/kakao")
     public ResponseEntity<Void> kakaoLoginRedirect() {
-        String kakaoAuthUrl = "https://kauth.kakao.com/oauth/authorize"
-                + "?client_id=" + kakaoClientId
-                + "&redirect_uri=" + kakaoRedirectUri
-                + "&response_type=code"
-                + "&scope=talk_message";
-        return ResponseEntity.status(302).location(URI.create(kakaoAuthUrl)).build();
+        URI kakaoAuthUri = UriComponentsBuilder.fromUriString(KAKAO_AUTHORIZE_URL)
+                .queryParam("client_id", kakaoClientId)
+                .queryParam("redirect_uri", kakaoRedirectUri)
+                .queryParam("response_type", "code")
+                .build()
+                .encode()
+                .toUri();
+        return ResponseEntity.status(302).location(kakaoAuthUri).build();
     }
 
-    /**
-     * 카카오 인가코드 콜백. 카카오가 직접 리다이렉트하는 엔드포인트.
-     * GET /api/auth/kakao/callback?code=xxx
-     * 로그인 취소 시: ?error=access_denied&error_description=...
-     */
     @GetMapping("/kakao/callback")
     public void kakaoCallback(
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String error,
+            @RequestParam(name = "error_description", required = false) String errorDescription,
             HttpServletResponse response) throws IOException {
 
-        if (error != null) {
-            response.sendRedirect(frontendRedirectUri + "?error=login_cancelled");
+        if (StringUtils.hasText(error)) {
+            String frontendError = "access_denied".equals(error) ? "login_cancelled" : "login_failed";
+            log.warn("auth_event=kakao_callback status=failure provider_error={} description_present={}",
+                    error, StringUtils.hasText(errorDescription));
+            redirectToFrontend(response, frontendError, null);
             return;
         }
 
-        LoginResponse loginResponse = kakaoAuthService.kakaoLogin(code);
-
-        ResponseCookie jwtCookie = ResponseCookie.from("accessToken", loginResponse.getAccessToken())
-                .httpOnly(true)
-                .secure(false)          // 운영 환경(HTTPS)에서는 true 로 변경
-                .path("/")
-                .maxAge(jwtExpiration / 1000)
-                .sameSite("Lax")
-                .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
-
-        String redirectUrl = frontendRedirectUri;
-        if (loginResponse.isNewMember()) {
-            redirectUrl += "?newMember=true";
+        if (!StringUtils.hasText(code)) {
+            log.warn("auth_event=kakao_callback status=failure reason=missing_code");
+            redirectToFrontend(response, "login_failed", null);
+            return;
         }
-        response.sendRedirect(redirectUrl);
+
+        try {
+            LoginResponse loginResponse = kakaoAuthService.kakaoLogin(code);
+            ResponseCookie jwtCookie = ResponseCookie.from("accessToken", loginResponse.getAccessToken())
+                    .httpOnly(true)
+                    // TODO(production): Use secure(true) once the service is served exclusively over HTTPS.
+                    .secure(false)
+                    .path("/")
+                    .maxAge(jwtExpiration / 1000)
+                    .sameSite("Lax")
+                    .build();
+            response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
+            redirectToFrontend(response, null, loginResponse.isNewMember());
+        } catch (KakaoAuthenticationException e) {
+            log.error("auth_event=kakao_callback status=failure reason={}", e.getReason());
+            redirectToFrontend(response, "login_failed", null);
+        }
+    }
+
+    private void redirectToFrontend(HttpServletResponse response, String error, Boolean newMember) throws IOException {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(frontendRedirectUri);
+        if (error != null) {
+            builder.queryParam("error", error);
+        }
+        if (Boolean.TRUE.equals(newMember)) {
+            builder.queryParam("newMember", true);
+        }
+        response.sendRedirect(builder.build().encode().toUriString());
     }
 }
