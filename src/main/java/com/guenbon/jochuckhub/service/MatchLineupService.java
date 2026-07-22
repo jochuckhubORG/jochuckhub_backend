@@ -2,7 +2,13 @@ package com.guenbon.jochuckhub.service;
 
 import com.guenbon.jochuckhub.dto.request.SaveLineupRequest;
 import com.guenbon.jochuckhub.dto.response.MatchLineupResponse;
-import com.guenbon.jochuckhub.entity.*;
+import com.guenbon.jochuckhub.entity.AttendStatus;
+import com.guenbon.jochuckhub.entity.Match;
+import com.guenbon.jochuckhub.entity.MatchLineupEntry;
+import com.guenbon.jochuckhub.entity.MatchVote;
+import com.guenbon.jochuckhub.entity.Member;
+import com.guenbon.jochuckhub.entity.Position;
+import com.guenbon.jochuckhub.entity.TeamRole;
 import com.guenbon.jochuckhub.exception.ForbiddenException;
 import com.guenbon.jochuckhub.repository.MatchLineupEntryRepository;
 import com.guenbon.jochuckhub.repository.MatchRepository;
@@ -10,24 +16,24 @@ import com.guenbon.jochuckhub.repository.MatchVoteRepository;
 import com.guenbon.jochuckhub.repository.MemberRepository;
 import com.guenbon.jochuckhub.repository.TeamMemberRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@Slf4j
 public class MatchLineupService {
 
     private static final int QUARTERS = 4;
     private static final int PLAYERS_PER_QUARTER = 10;
-
-    // 4-3-3 포메이션: LB CB CB RB / CDM CM CM / LW ST RW
     private static final List<Position> FORMATION = List.of(
             Position.LB, Position.CB, Position.CB, Position.RB,
             Position.CDM, Position.CM, Position.CM,
@@ -39,83 +45,50 @@ public class MatchLineupService {
     private final MemberRepository memberRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final MatchLineupEntryRepository lineupEntryRepository;
-    private final LineupImageService lineupImageService;
-    private final KakaoMessageService kakaoMessageService;
 
     @Transactional
     public MatchLineupResponse generateLineup(Long matchId, Long requesterId) {
         Match match = findMatch(matchId);
+        verifyOwnerOrManager(match, requesterId);
+        verifyVoteClosed(match);
 
-        // OWNER/MANAGER 권한 확인
-        if (!teamMemberRepository.existsByTeamIdAndMemberIdAndRoleIn(
-                match.getHomeTeam().getId(), requesterId,
-                List.of(TeamRole.OWNER, TeamRole.MANAGER))) {
-            throw new ForbiddenException("OWNER 또는 MANAGER만 라인업을 생성할 수 있습니다.");
-        }
-
-        // 투표 마감 확인
-        if (LocalDateTime.now().isBefore(match.getEffectiveVoteDeadline())) {
-            throw new IllegalArgumentException("투표가 아직 마감되지 않았습니다.");
-        }
-
-        // 참석 투표 인원 조회
         List<MatchVote> attendVotes = matchVoteRepository.findAllByMatchIdAndAttendStatus(matchId, AttendStatus.ATTEND);
-        int n = attendVotes.size();
-
-        // 인원 유효 범위: 14 ≤ N ≤ 20 (3x + 2y = 40, x + y = N)
-        if (n < 14) {
-            throw new IllegalArgumentException(
-                    "인원이 너무 적어서 자동구성할 수 없습니다. (최소 14명 필요, 현재 " + n + "명)");
-        }
-        if (n > 20) {
-            throw new IllegalArgumentException(
-                    "인원이 너무 많아서 자동구성할 수 없습니다. (최대 20명 가능, 현재 " + n + "명)");
+        int attendeeCount = attendVotes.size();
+        if (attendeeCount < 14 || attendeeCount > 20) {
+            throw new IllegalArgumentException("자동 라인업은 참석 인원이 14명 이상 20명 이하여야 합니다. 현재 " + attendeeCount + "명");
         }
 
-        // 기존 라인업 삭제 후 재생성
         lineupEntryRepository.deleteByMatchId(matchId);
-
-        // Phase 1: 출석율 점수 기준 내림차순 정렬
         Long homeTeamId = match.getHomeTeam().getId();
         List<ScoredMember> scoredMembers = attendVotes.stream()
-                .map(vote -> {
-                    Member member = vote.getMember();
-                    int score = matchVoteRepository
-                            .findTop8ByMemberIdAndMatchHomeTeamIdOrderByMatchMatchDateDesc(member.getId(), homeTeamId)
-                            .stream().mapToInt(MatchVote::getScore).sum();
-                    return new ScoredMember(member, score);
-                })
+                .map(vote -> new ScoredMember(vote.getMember(), attendanceScore(vote.getMember().getId(), homeTeamId)))
                 .sorted(Comparator.comparingInt(ScoredMember::score).reversed())
                 .toList();
 
-        // Phase 1: 쿼터 배정 (상위 threeQuarterCount명이 3쿼터, 나머지가 2쿼터)
-        int threeQuarterCount = 40 - 2 * n; // x = 40 - 2N
-        List<List<Integer>> quarterAssignments = assignQuarters(n, threeQuarterCount);
-
-        // 쿼터별 플레이어 목록 구성
+        List<List<Integer>> quarterAssignments = assignQuarters(attendeeCount, 40 - 2 * attendeeCount);
         List<List<ScoredMember>> quarterPlayers = new ArrayList<>();
-        for (int q = 0; q < QUARTERS; q++) quarterPlayers.add(new ArrayList<>());
-        for (int i = 0; i < scoredMembers.size(); i++) {
-            for (int q : quarterAssignments.get(i)) {
-                quarterPlayers.get(q).add(scoredMembers.get(i));
+        for (int quarter = 0; quarter < QUARTERS; quarter++) {
+            quarterPlayers.add(new ArrayList<>());
+        }
+        for (int index = 0; index < scoredMembers.size(); index++) {
+            for (int quarter : quarterAssignments.get(index)) {
+                quarterPlayers.get(quarter).add(scoredMembers.get(index));
             }
         }
 
-        // Phase 2: 각 쿼터별 헝가리안 알고리즘으로 포지션 배정
         List<MatchLineupEntry> entries = new ArrayList<>();
-        for (int q = 0; q < QUARTERS; q++) {
-            List<ScoredMember> players = quarterPlayers.get(q);
+        for (int quarter = 0; quarter < QUARTERS; quarter++) {
+            List<ScoredMember> players = quarterPlayers.get(quarter);
             int[] assignment = solveAssignment(players);
-            for (int i = 0; i < players.size(); i++) {
+            for (int index = 0; index < players.size(); index++) {
                 entries.add(MatchLineupEntry.builder()
                         .match(match)
-                        .quarter(q + 1)
-                        .member(players.get(i).member())
-                        .position(FORMATION.get(assignment[i]))
+                        .quarter(quarter + 1)
+                        .member(players.get(index).member())
+                        .position(FORMATION.get(assignment[index]))
                         .build());
             }
         }
-
         lineupEntryRepository.saveAll(entries);
         return buildResponse(matchId, entries);
     }
@@ -132,37 +105,23 @@ public class MatchLineupService {
     @Transactional
     public MatchLineupResponse saveLineup(Long matchId, SaveLineupRequest request, Long requesterId) {
         Match match = findMatch(matchId);
+        verifyOwnerOrManager(match, requesterId);
+        verifyVoteClosed(match);
 
-        // OWNER/MANAGER 권한 확인
-        if (!teamMemberRepository.existsByTeamIdAndMemberIdAndRoleIn(
-                match.getHomeTeam().getId(), requesterId,
-                List.of(TeamRole.OWNER, TeamRole.MANAGER))) {
-            throw new ForbiddenException("OWNER 또는 MANAGER만 라인업을 저장할 수 있습니다.");
-        }
-
-        // 투표 마감 확인
-        if (LocalDateTime.now().isBefore(match.getEffectiveVoteDeadline())) {
-            throw new IllegalArgumentException("투표가 아직 마감되지 않았습니다.");
-        }
-
-        // 쿼터 번호 유효성 확인 (1~4 각각 1개씩)
-        List<Integer> quarterNumbers = request.getQuarters().stream()
+        List<Integer> quarters = request.getQuarters().stream()
                 .map(SaveLineupRequest.QuarterEntry::getQuarter)
                 .sorted()
                 .toList();
-        if (!quarterNumbers.equals(List.of(1, 2, 3, 4))) {
+        if (!quarters.equals(List.of(1, 2, 3, 4))) {
             throw new IllegalArgumentException("1~4쿼터 데이터가 각각 1개씩 있어야 합니다.");
         }
 
-        // 기존 라인업 삭제 후 저장
         lineupEntryRepository.deleteByMatchId(matchId);
-
         List<MatchLineupEntry> entries = new ArrayList<>();
         for (SaveLineupRequest.QuarterEntry quarterEntry : request.getQuarters()) {
             for (SaveLineupRequest.PlayerEntry playerEntry : quarterEntry.getPlayers()) {
                 Member member = memberRepository.findById(playerEntry.getMemberId())
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "존재하지 않는 멤버입니다: " + playerEntry.getMemberId()));
+                        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 멤버입니다: " + playerEntry.getMemberId()));
                 entries.add(MatchLineupEntry.builder()
                         .match(match)
                         .quarter(quarterEntry.getQuarter())
@@ -171,223 +130,131 @@ public class MatchLineupService {
                         .build());
             }
         }
-
         lineupEntryRepository.saveAll(entries);
         return buildResponse(matchId, entries);
     }
 
-    /**
-     * 각 플레이어에게 뛸 쿼터를 배정한다.
-     * 남은 슬롯이 많은 쿼터를 우선 배정하여 쿼터 간 균형을 맞춘다.
-     */
-    private List<List<Integer>> assignQuarters(int n, int threeQuarterCount) {
+    private int attendanceScore(Long memberId, Long homeTeamId) {
+        return matchVoteRepository.findTop8ByMemberIdAndMatchHomeTeamIdOrderByMatchMatchDateDesc(memberId, homeTeamId)
+                .stream()
+                .mapToInt(MatchVote::getScore)
+                .sum();
+    }
+
+    private List<List<Integer>> assignQuarters(int attendeeCount, int threeQuarterCount) {
         int[] remaining = {PLAYERS_PER_QUARTER, PLAYERS_PER_QUARTER, PLAYERS_PER_QUARTER, PLAYERS_PER_QUARTER};
         List<List<Integer>> assignments = new ArrayList<>();
-
-        for (int i = 0; i < n; i++) {
-            int playCount = (i < threeQuarterCount) ? 3 : 2;
-            Integer[] quarterOrder = {0, 1, 2, 3};
-            // 남은 슬롯 많은 쿼터 우선, 동점이면 인덱스 오름차순
-            Arrays.sort(quarterOrder, (a, b) ->
-                    remaining[a] != remaining[b] ? remaining[b] - remaining[a] : a - b);
-
+        for (int index = 0; index < attendeeCount; index++) {
+            int playCount = index < threeQuarterCount ? 3 : 2;
+            Integer[] order = {0, 1, 2, 3};
+            Arrays.sort(order, (left, right) -> remaining[left] != remaining[right]
+                    ? remaining[right] - remaining[left]
+                    : left - right);
             List<Integer> chosen = new ArrayList<>();
-            for (int j = 0; j < playCount; j++) {
-                chosen.add(quarterOrder[j]);
-                remaining[quarterOrder[j]]--;
+            for (int count = 0; count < playCount; count++) {
+                chosen.add(order[count]);
+                remaining[order[count]]--;
             }
             assignments.add(chosen);
         }
         return assignments;
     }
 
-    /**
-     * 10명 × 10포지션 슬롯에 대해 헝가리안 알고리즘으로 최대 만족도 배정을 수행한다.
-     * 만족도: 주 포지션=2, 부 포지션=1, 해당 없음=0
-     */
     private int[] solveAssignment(List<ScoredMember> players) {
-        int n = players.size();
-        int[][] cost = new int[n][n];
-        for (int i = 0; i < n; i++) {
-            Member member = players.get(i).member();
-            for (int j = 0; j < n; j++) {
-                Position pos = FORMATION.get(j);
-                int satisfaction;
-                if (pos == member.getMainPosition()) {
-                    satisfaction = 2;
-                } else if (member.getSubPositions().contains(pos)) {
-                    satisfaction = 1;
-                } else {
-                    satisfaction = 0;
-                }
-                cost[i][j] = 2 - satisfaction; // 최소 비용으로 변환 (만족도 최대화 → 비용 최소화)
+        int playerCount = players.size();
+        int[][] cost = new int[playerCount][playerCount];
+        for (int player = 0; player < playerCount; player++) {
+            Member member = players.get(player).member();
+            for (int slot = 0; slot < playerCount; slot++) {
+                Position position = FORMATION.get(slot);
+                int satisfaction = position == member.getMainPosition() ? 2
+                        : member.getSubPositions().contains(position) ? 1 : 0;
+                cost[player][slot] = 2 - satisfaction;
             }
         }
         return hungarian(cost);
     }
 
-    /**
-     * 헝가리안 알고리즘 O(n³) - 최소 비용 완전 이분 매칭
-     */
     private int[] hungarian(int[][] cost) {
-        int n = cost.length;
-        int[] u = new int[n + 1], v = new int[n + 1], p = new int[n + 1], way = new int[n + 1];
-
-        for (int i = 1; i <= n; i++) {
-            p[0] = i;
-            int j0 = 0;
-            int[] minVal = new int[n + 1];
-            boolean[] used = new boolean[n + 1];
-            Arrays.fill(minVal, Integer.MAX_VALUE);
-
+        int size = cost.length;
+        int[] u = new int[size + 1], v = new int[size + 1], p = new int[size + 1], way = new int[size + 1];
+        for (int row = 1; row <= size; row++) {
+            p[0] = row;
+            int column = 0;
+            int[] minimum = new int[size + 1];
+            boolean[] used = new boolean[size + 1];
+            Arrays.fill(minimum, Integer.MAX_VALUE);
             do {
-                used[j0] = true;
-                int i0 = p[j0], delta = Integer.MAX_VALUE, j1 = -1;
-                for (int j = 1; j <= n; j++) {
-                    if (!used[j]) {
-                        int cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
-                        if (cur < minVal[j]) {
-                            minVal[j] = cur;
-                            way[j] = j0;
+                used[column] = true;
+                int rowIndex = p[column], delta = Integer.MAX_VALUE, nextColumn = -1;
+                for (int candidate = 1; candidate <= size; candidate++) {
+                    if (!used[candidate]) {
+                        int current = cost[rowIndex - 1][candidate - 1] - u[rowIndex] - v[candidate];
+                        if (current < minimum[candidate]) {
+                            minimum[candidate] = current;
+                            way[candidate] = column;
                         }
-                        if (minVal[j] < delta) {
-                            delta = minVal[j];
-                            j1 = j;
+                        if (minimum[candidate] < delta) {
+                            delta = minimum[candidate];
+                            nextColumn = candidate;
                         }
                     }
                 }
-                for (int j = 0; j <= n; j++) {
-                    if (used[j]) {
-                        u[p[j]] += delta;
-                        v[j] -= delta;
+                for (int candidate = 0; candidate <= size; candidate++) {
+                    if (used[candidate]) {
+                        u[p[candidate]] += delta;
+                        v[candidate] -= delta;
                     } else {
-                        minVal[j] -= delta;
+                        minimum[candidate] -= delta;
                     }
                 }
-                j0 = j1;
-            } while (p[j0] != 0);
-
+                column = nextColumn;
+            } while (p[column] != 0);
             do {
-                int j1 = way[j0];
-                p[j0] = p[j1];
-                j0 = j1;
-            } while (j0 != 0);
+                int previous = way[column];
+                p[column] = p[previous];
+                column = previous;
+            } while (column != 0);
         }
-
-        int[] assignment = new int[n];
-        for (int j = 1; j <= n; j++) {
-            if (p[j] != 0) assignment[p[j] - 1] = j - 1;
+        int[] assignment = new int[size];
+        for (int column = 1; column <= size; column++) {
+            if (p[column] != 0) assignment[p[column] - 1] = column - 1;
         }
         return assignment;
     }
 
     private MatchLineupResponse buildResponse(Long matchId, List<MatchLineupEntry> entries) {
-        Map<Integer, List<MatchLineupResponse.PlayerAssignment>> map = new TreeMap<>();
+        Map<Integer, List<MatchLineupResponse.PlayerAssignment>> assignments = new TreeMap<>();
         for (MatchLineupEntry entry : entries) {
             Member member = entry.getMember();
-            Position pos = entry.getPosition();
-            String fit;
-            if (pos == member.getMainPosition()) fit = "MAIN";
-            else if (member.getSubPositions().contains(pos)) fit = "SUB";
-            else fit = "OTHER";
-
-            map.computeIfAbsent(entry.getQuarter(), k -> new ArrayList<>())
-                    .add(new MatchLineupResponse.PlayerAssignment(
-                            member.getId(), member.getName(), pos, fit));
+            Position position = entry.getPosition();
+            String fit = position == member.getMainPosition() ? "MAIN"
+                    : member.getSubPositions().contains(position) ? "SUB" : "OTHER";
+            assignments.computeIfAbsent(entry.getQuarter(), ignored -> new ArrayList<>())
+                    .add(new MatchLineupResponse.PlayerAssignment(member.getId(), member.getName(), position, fit));
         }
-
-        List<MatchLineupResponse.QuarterLineup> quarters = map.entrySet().stream()
-                .map(e -> new MatchLineupResponse.QuarterLineup(e.getKey(), e.getValue()))
+        List<MatchLineupResponse.QuarterLineup> quarters = assignments.entrySet().stream()
+                .map(entry -> new MatchLineupResponse.QuarterLineup(entry.getKey(), entry.getValue()))
                 .toList();
-
         return new MatchLineupResponse(matchId, quarters);
-    }
-
-    /**
-     * 완성된 라인업을 팀원 전체에게 카카오톡으로 발표한다.
-     *
-     * <ol>
-     *   <li>쿼터별 라인업 이미지 생성</li>
-     *   <li>요청자의 카카오 토큰으로 이미지 업로드 (1회)</li>
-     *   <li>팀원 각자의 카카오 토큰으로 나에게 보내기 전송</li>
-     * </ol>
-     *
-     * 카카오 토큰이 없는 팀원은 건너뛰며, 개별 전송 실패는 경고 로그 후 계속 진행한다.
-     */
-    public record AnnounceResult(int sentCount, int skippedCount) {}
-
-    public AnnounceResult announceLineup(Long matchId, Long requesterId) {
-        Match match = findMatch(matchId);
-
-        // OWNER/MANAGER 권한 확인
-        if (!teamMemberRepository.existsByTeamIdAndMemberIdAndRoleIn(
-                match.getHomeTeam().getId(), requesterId,
-                List.of(TeamRole.OWNER, TeamRole.MANAGER))) {
-            throw new ForbiddenException("OWNER 또는 MANAGER만 라인업을 발표할 수 있습니다.");
-        }
-
-        // 라인업 조회
-        List<MatchLineupEntry> entries = lineupEntryRepository.findAllByMatchId(matchId);
-        if (entries.isEmpty()) {
-            throw new IllegalArgumentException("라인업이 아직 생성되지 않았습니다.");
-        }
-        MatchLineupResponse lineup = buildResponse(matchId, entries);
-
-        // 요청자의 카카오 액세스 토큰 확인
-        Member requester = memberRepository.findById(requesterId)
-                .orElseThrow(() -> new IllegalArgumentException("요청자를 찾을 수 없습니다."));
-        if (requester.getKakaoAccessToken() == null) {
-            throw new IllegalArgumentException("카카오 연동 정보가 없습니다. 다시 로그인 후 시도해 주세요.");
-        }
-
-        // 매치 제목 (이미지 헤더에 사용)
-        String matchTitle = match.getHomeTeam().getName() + " vs " + match.getOpponentTeam().getName();
-
-        // 쿼터별 이미지 생성 및 업로드
-        List<String> imageUrls = new ArrayList<>();
-        for (MatchLineupResponse.QuarterLineup quarterLineup : lineup.getQuarters()) {
-            try {
-                byte[] imgBytes = lineupImageService.generateQuarterImage(
-                        quarterLineup.getQuarter(), quarterLineup.getPlayers(), matchTitle);
-                String url = kakaoMessageService.uploadImage(requester.getKakaoAccessToken(), imgBytes);
-                imageUrls.add(url);
-            } catch (IOException e) {
-                throw new IllegalStateException(quarterLineup.getQuarter() + "쿼터 이미지 생성 실패", e);
-            }
-        }
-
-        // 팀원 전체에게 메시지 전송
-        List<TeamMember> teamMembers = teamMemberRepository.findAllByTeamId(match.getHomeTeam().getId());
-        int sent = 0;
-        for (TeamMember tm : teamMembers) {
-            String token = tm.getMember().getKakaoAccessToken();
-            if (token == null) {
-                log.debug("카카오 토큰 없음, 건너뜀: memberId={}", tm.getMember().getId());
-                continue;
-            }
-            try {
-                for (int i = 0; i < imageUrls.size(); i++) {
-                    MatchLineupResponse.QuarterLineup q = lineup.getQuarters().get(i);
-                    kakaoMessageService.sendSelfMessage(
-                            token,
-                            imageUrls.get(i),
-                            q.getQuarter() + "쿼터 라인업",
-                            matchTitle
-                    );
-                }
-                sent++;
-            } catch (Exception e) {
-                log.warn("카카오 메시지 전송 실패 (memberId={}): {}", tm.getMember().getId(), e.getMessage());
-            }
-        }
-        int skipped = teamMembers.size() - sent;
-        log.info("라인업 발표 완료: matchId={}, 전송 성공={}/{}명 (건너뜀={}명)", matchId, sent, teamMembers.size(), skipped);
-        return new AnnounceResult(sent, skipped);
     }
 
     private Match findMatch(Long matchId) {
         return matchRepository.findById(matchId)
                 .orElseThrow(() -> new IllegalArgumentException("매치를 찾을 수 없습니다."));
+    }
+
+    private void verifyOwnerOrManager(Match match, Long requesterId) {
+        if (!teamMemberRepository.existsByTeamIdAndMemberIdAndRoleIn(match.getHomeTeam().getId(), requesterId,
+                List.of(TeamRole.OWNER, TeamRole.MANAGER))) {
+            throw new ForbiddenException("OWNER 또는 MANAGER만 라인업을 관리할 수 있습니다.");
+        }
+    }
+
+    private void verifyVoteClosed(Match match) {
+        if (LocalDateTime.now().isBefore(match.getEffectiveVoteDeadline())) {
+            throw new IllegalArgumentException("투표가 아직 마감되지 않았습니다.");
+        }
     }
 
     private record ScoredMember(Member member, int score) {}
