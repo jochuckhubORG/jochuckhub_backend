@@ -158,7 +158,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 
 | 컨트롤러 | API 수 | API | 리뷰 현황 |
 |---|---:|---|---|
-| `AuthController` | 2 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback` | 리뷰 완료 · 사용자 미검토 |
+| `AuthController` | 2 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback` | 사용자 검토 완료 |
 | `MemberController` | 6 | `GET /api/members`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records` | 리뷰 안함 |
 | `TeamController` | 9 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 리뷰 안함 |
 | `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 리뷰 안함 |
