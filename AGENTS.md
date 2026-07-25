@@ -80,7 +80,7 @@ src/main/java/com/guenbon/jochuckhub/
 
 **세션**: `STATELESS` — 서버 측 세션 없음, JWT 쿠키로만 인증 유지
 
-**CSRF**: 비활성화 — JWT 쿠키 기반 Stateless REST API이므로 불필요
+**CSRF**: 활성화 — `XSRF-TOKEN` 쿠키와 요청 헤더 토큰을 비교한다. 상태 변경 요청(POST, PUT, PATCH, DELETE)에는 CSRF 토큰이 필요하다.
 
 **CORS**: `application.properties`의 `cors.allowed-origins` 값으로 허용 Origin 지정
 - `credentials: true` (쿠키 전송 허용)
@@ -108,6 +108,7 @@ src/main/java/com/guenbon/jochuckhub/
 - `kakaoId` → DB 컬럼 `kakao_id`, `username`은 `"kakao_{kakaoId}"` 형식으로 자동 생성
 - `mainPosition`(1개) + `subPositions`(`Set<Position>`, 최대 3개, 중복 불가)
 - `@Audited` — Hibernate Envers로 변경 이력 추적
+- 주요 엔티티는 `BaseTimeEntity`를 상속해 `createdAt`, `updatedAt`을 자동 기록
 
 **Team**
 - `virtual=false`: 실제 팀. 이름 uniqueness는 실제 팀 간에만 적용
@@ -149,6 +150,8 @@ src/main/java/com/guenbon/jochuckhub/
 ## API 엔드포인트
 
 ## API 리뷰 진행 현황
+
+상세한 컨트롤러별 리뷰·수정 이력은 [docs/api-review-status.md](docs/api-review-status.md)에서 관리한다.
 
 API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 중 하나를 가진다.
 
@@ -262,13 +265,14 @@ MemberNotFoundException          → 404  MEMBER_NOT_FOUND
 TeamNotFoundException            → 404  TEAM_NOT_FOUND
 ForbiddenException               → 403  FORBIDDEN
 IllegalArgumentException         → 400  BAD_REQUEST
+DataIntegrityViolationException  → 409  DATA_INTEGRITY_VIOLATION
 Exception (기타)                  → 500  INTERNAL_SERVER_ERROR
 ```
 응답 형식: `{ "code": "...", "message": "..." }`
 
 ## DB 설정
 
-- MySQL, 포트 3306, DB명 `jochuckhub`, `ddl-auto=create-drop` (개발용)
+- MySQL, 포트 3306, DB명 `jochuckhub`, `ddl-auto=update` (개발용)
 - username/password는 `application-private.properties`에서 설정
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
