@@ -159,7 +159,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 | 컨트롤러 | API 수 | API | 리뷰 현황 |
 |---|---:|---|---|
 | `AuthController` | 2 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback` | 사용자 검토 완료 |
-| `MemberController` | 6 | `GET /api/members`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records` | 리뷰 안함 |
+| `MemberController` | 6 | `GET /api/members?page=0`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records?page=0` | 리뷰 완료 · 사용자 미검토 |
 | `TeamController` | 9 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 리뷰 안함 |
 | `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 리뷰 안함 |
 | `MatchVoteController` | 4 | `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status` | 리뷰 안함 |
@@ -177,12 +177,12 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 ### 회원
 | 메서드 | URL | 권한 |
 |--------|-----|------|
-| `GET` | `/api/members` | 인증 |
+| `GET` | `/api/members[?page=0]` | 인증 (최근 가입순, 페이지당 20명) |
 | `GET` | `/api/members/me` | 인증 (현재 로그인한 사용자 정보) |
 | `GET` | `/api/members/{id}` | 인증 |
 | `PUT` | `/api/members/{id}` | 인증(본인) |
 | `GET` | `/api/members/{id}/attendance-score?teamId=xxx` | 인증 |
-| `GET` | `/api/members/{id}/goal-records?teamId=xxx[&type=GOAL\|ASSIST][&sortDirection=ASC\|DESC][&opponentTeamId=yyy][&startDate=yyyy-MM-dd][&endDate=yyyy-MM-dd][&relatedMemberId=zzz]` | 인증 |
+| `GET` | `/api/members/{id}/goal-records?teamId=xxx[&type=GOAL\|ASSIST][&sortDirection=ASC\|DESC][&opponentTeamId=yyy][&startDate=yyyy-MM-dd][&endDate=yyyy-MM-dd][&relatedMemberId=zzz][&page=0]` | 팀 소속 멤버 (페이지당 20건) |
 
 > `relatedMemberId` 필터: `type=GOAL`이면 어시스트한 멤버, `type=ASSIST`이면 골을 넣은 멤버, `type` 없으면 해당 골에 관여한 멤버 전체
 
@@ -238,7 +238,8 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 
 **응답 DTO**
 - `LoginResponse`: accessToken, tokenType, memberId, isNewMember
-- `MemberResponse`: id, username, name, mainPosition, subPositions
+- `MemberResponse`: id, name, mainPosition, subPositions
+- `PageResponse<T>`: content, page, size, totalElements, totalPages, first, last
 - `TeamSummaryResponse`: id, name, virtual, memberCount
 - `TeamDetailResponse`: id, name, virtual, owner, managers[], memberCount, currentUserRole
 - `TeamMemberStatsResponse`: id, username, name, mainPosition, subPositions, role, goals, assists, appearances

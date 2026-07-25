@@ -19,5 +19,6 @@ public class UpdateMemberRequest {
     private Position mainPosition;
 
     @Size(max = 3, message = "서브 포지션은 최대 3개까지 등록할 수 있습니다.")
+    @NotNull(message = "Sub positions are required.")
     private Set<Position> subPositions = new HashSet<>();
 }

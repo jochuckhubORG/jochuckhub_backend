@@ -10,16 +10,14 @@ import java.util.Set;
 public class MemberResponse {
 
     private final Long id;
-    private final String username;
     private final String name;
     private final Position mainPosition;
     private final Set<Position> subPositions;
 
     public MemberResponse(Member member) {
         this.id = member.getId();
-        this.username = member.getUsername();
         this.name = member.getName();
         this.mainPosition = member.getMainPosition();
-        this.subPositions = member.getSubPositions();
+        this.subPositions = Set.copyOf(member.getSubPositions());
     }
 }

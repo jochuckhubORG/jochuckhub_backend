@@ -1,9 +1,11 @@
 package com.guenbon.jochuckhub.service;
 
 import com.guenbon.jochuckhub.dto.response.GoalRecordResponse;
+import com.guenbon.jochuckhub.dto.response.PageResponse;
 import com.guenbon.jochuckhub.dto.response.TeamMemberStatsResponse;
 import com.guenbon.jochuckhub.entity.TeamMember;
 import com.guenbon.jochuckhub.exception.MemberNotFoundException;
+import com.guenbon.jochuckhub.exception.ForbiddenException;
 import com.guenbon.jochuckhub.exception.TeamNotFoundException;
 import com.guenbon.jochuckhub.repository.goal.GoalRepository;
 import com.guenbon.jochuckhub.repository.MatchLineupEntryRepository;
@@ -12,6 +14,7 @@ import com.guenbon.jochuckhub.repository.TeamMemberRepository;
 import com.guenbon.jochuckhub.repository.TeamRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -67,12 +70,12 @@ public class StatsService {
      * @param endDate         날짜 범위 종료 (포함)
      * @param relatedMemberId 해당 멤버와 함께한 기록만 (골→어시스터, 어시스트→득점자)
      */
-    public List<GoalRecordResponse> getGoalRecords(
+    public PageResponse<GoalRecordResponse> getGoalRecords(
             Long memberId, Long teamId,
             String type, String sortDirection,
             Long opponentTeamId,
             LocalDate startDate, LocalDate endDate,
-            Long relatedMemberId) {
+            Long relatedMemberId, Long requesterId, int page) {
 
         if (!memberRepository.existsById(memberId)) {
             throw new MemberNotFoundException();
@@ -80,15 +83,26 @@ public class StatsService {
         if (!teamRepository.existsById(teamId)) {
             throw new TeamNotFoundException();
         }
+        if (!teamMemberRepository.existsByTeamIdAndMemberId(teamId, requesterId)) {
+            throw new ForbiddenException("해당 팀 소속 멤버만 골 기록을 조회할 수 있습니다.");
+        }
+        if (type != null && !"GOAL".equalsIgnoreCase(type) && !"ASSIST".equalsIgnoreCase(type)) {
+            throw new IllegalArgumentException("type은 GOAL 또는 ASSIST만 사용할 수 있습니다.");
+        }
+        if (!"ASC".equalsIgnoreCase(sortDirection) && !"DESC".equalsIgnoreCase(sortDirection)) {
+            throw new IllegalArgumentException("sortDirection은 ASC 또는 DESC만 사용할 수 있습니다.");
+        }
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("startDate는 endDate보다 늦을 수 없습니다.");
+        }
 
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : null;
 
-        return goalRepository.findGoalRecords(
-                        teamId, memberId, type, sortDirection, opponentTeamId, startDateTime, endDateTime, relatedMemberId)
-                .stream()
-                .map(g -> new GoalRecordResponse(g, memberId))
-                .toList();
+        return PageResponse.from(goalRepository.findGoalRecords(
+                        teamId, memberId, type == null ? null : type.toUpperCase(), sortDirection.toUpperCase(),
+                        opponentTeamId, startDateTime, endDateTime, relatedMemberId, PageRequest.of(page, 20)),
+                goal -> new GoalRecordResponse(goal, memberId));
     }
 
     private Map<Long, Long> toMap(List<Object[]> rows) {
