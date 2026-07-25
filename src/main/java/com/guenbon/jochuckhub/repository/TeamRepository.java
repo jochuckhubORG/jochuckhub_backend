@@ -6,20 +6,21 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface TeamRepository extends JpaRepository<Team, Long> {
 
-    boolean existsByNameAndVirtualFalse(String name);
+    Optional<Team> findByIdAndDeletedFalse(Long id);
 
-    boolean existsByNameAndVirtualTrueAndCreatedByTeamId(String name, Long createdByTeamId);
+    boolean existsByIdAndDeletedFalse(Long id);
 
     /**
      * 팀 이름으로 검색: 실제 팀 전체 + 특정 팀이 만든 가상 팀
      */
-    @Query("SELECT t FROM Team t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :name, '%')) " +
+    @Query("SELECT t FROM Team t WHERE t.deleted = false AND LOWER(t.name) LIKE LOWER(CONCAT('%', :name, '%')) " +
             "AND (t.virtual = false OR (t.virtual = true AND t.createdByTeamId = :myTeamId))")
     List<Team> searchByNameForTeam(@Param("name") String name, @Param("myTeamId") Long myTeamId);
 
-    @Query("SELECT t FROM Team t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :name, '%')) AND t.virtual = false")
+    @Query("SELECT t FROM Team t WHERE t.deleted = false AND LOWER(t.name) LIKE LOWER(CONCAT('%', :name, '%')) AND t.virtual = false")
     List<Team> searchRealTeamsByName(@Param("name") String name);
 }

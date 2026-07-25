@@ -60,7 +60,7 @@ public class MemberService {
     }
 
     public int getAttendanceScore(Long memberId, Long teamId, Long requesterId) {
-        if (!teamRepository.existsById(teamId)) {
+        if (!teamRepository.existsByIdAndDeletedFalse(teamId)) {
             throw new TeamNotFoundException();
         }
         if (!teamMemberRepository.existsByTeamIdAndMemberId(teamId, requesterId)) {

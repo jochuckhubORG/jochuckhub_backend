@@ -6,8 +6,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Entity
 @Getter
@@ -22,6 +24,9 @@ public class Team extends BaseTimeEntity {
     @Column(nullable = false)
     private String name;
 
+    @Column(name = "name_key", nullable = false, unique = true)
+    private String nameKey;
+
     /**
      * true: 다른 팀이 상대팀으로 등록한 가상 팀 (이 서비스에 가입하지 않은 팀)
      */
@@ -34,6 +39,12 @@ public class Team extends BaseTimeEntity {
     @Column(name = "created_by_team_id")
     private Long createdByTeamId;
 
+    @Column(nullable = false)
+    private boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TeamMember> teamMembers = new ArrayList<>();
 
@@ -42,9 +53,23 @@ public class Team extends BaseTimeEntity {
         this.name = name;
         this.virtual = virtual;
         this.createdByTeamId = createdByTeamId;
+        this.nameKey = createNameKey(name, virtual, createdByTeamId);
     }
 
     public void updateName(String name) {
         this.name = name;
+        this.nameKey = createNameKey(name, virtual, createdByTeamId);
+    }
+
+    public void deactivate() {
+        this.deleted = true;
+        this.deletedAt = LocalDateTime.now();
+    }
+
+    private static String createNameKey(String name, boolean virtual, Long createdByTeamId) {
+        String normalizedName = name.trim().toLowerCase(Locale.ROOT);
+        return virtual
+                ? "VIRTUAL:" + createdByTeamId + ":" + normalizedName
+                : "REAL:" + normalizedName;
     }
 }

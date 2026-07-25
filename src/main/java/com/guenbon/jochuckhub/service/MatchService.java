@@ -38,10 +38,10 @@ public class MatchService {
             throw new IllegalArgumentException("매치는 현재 시간으로부터 최소 2시간 이후로만 생성할 수 있습니다.");
         }
 
-        Team homeTeam = teamRepository.findById(homeTeamId)
+        Team homeTeam = teamRepository.findByIdAndDeletedFalse(homeTeamId)
                 .orElseThrow(TeamNotFoundException::new);
 
-        Team opponentTeam = teamRepository.findById(request.getOpponentTeamId())
+        Team opponentTeam = teamRepository.findByIdAndDeletedFalse(request.getOpponentTeamId())
                 .orElseThrow(TeamNotFoundException::new);
 
         // 가상 팀인 경우 내 팀이 만든 가상 팀인지 확인
