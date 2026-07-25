@@ -2,6 +2,7 @@ package com.guenbon.jochuckhub.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.envers.Audited;
 import org.hibernate.envers.NotAudited;
 
@@ -13,7 +14,7 @@ import java.util.Set;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "member")
-public class Member {
+public class Member extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,6 +37,7 @@ public class Member {
     private Position mainPosition;
 
     @NotAudited
+    @BatchSize(size = 20)
     @ElementCollection
     @CollectionTable(name = "member_sub_position", joinColumns = @JoinColumn(name = "member_id"))
     @Enumerated(EnumType.STRING)

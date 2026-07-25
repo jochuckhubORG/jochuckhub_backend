@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "match_vote",
         uniqueConstraints = @UniqueConstraint(columnNames = {"match_id", "member_id"}))
-public class MatchVote {
+public class MatchVote extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

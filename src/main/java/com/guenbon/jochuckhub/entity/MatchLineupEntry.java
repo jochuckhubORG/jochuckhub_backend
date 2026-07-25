@@ -7,7 +7,7 @@ import lombok.*;
 @Table(name = "match_lineup_entry")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class MatchLineupEntry {
+public class MatchLineupEntry extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
