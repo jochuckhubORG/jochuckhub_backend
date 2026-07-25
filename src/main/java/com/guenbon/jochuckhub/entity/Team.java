@@ -64,6 +64,7 @@ public class Team extends BaseTimeEntity {
     public void deactivate() {
         this.deleted = true;
         this.deletedAt = LocalDateTime.now();
+        this.nameKey = "DELETED:" + id + ":" + nameKey;
     }
 
     private static String createNameKey(String name, boolean virtual, Long createdByTeamId) {

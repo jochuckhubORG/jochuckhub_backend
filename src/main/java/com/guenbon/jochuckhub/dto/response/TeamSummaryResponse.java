@@ -17,4 +17,11 @@ public class TeamSummaryResponse {
         this.virtual = team.isVirtual();
         this.memberCount = team.getTeamMembers().size();
     }
+
+    public TeamSummaryResponse(Long id, String name, boolean virtual, long memberCount) {
+        this.id = id;
+        this.name = name;
+        this.virtual = virtual;
+        this.memberCount = Math.toIntExact(memberCount);
+    }
 }

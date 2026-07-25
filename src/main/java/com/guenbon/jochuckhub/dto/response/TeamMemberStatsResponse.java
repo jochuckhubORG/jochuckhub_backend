@@ -1,7 +1,6 @@
 package com.guenbon.jochuckhub.dto.response;
 
 import com.guenbon.jochuckhub.entity.Position;
-import com.guenbon.jochuckhub.entity.TeamMember;
 import com.guenbon.jochuckhub.entity.TeamRole;
 import lombok.Getter;
 
@@ -11,7 +10,6 @@ import java.util.Set;
 public class TeamMemberStatsResponse {
 
     private final Long id;
-    private final String username;
     private final String name;
     private final Position mainPosition;
     private final Set<Position> subPositions;
@@ -20,13 +18,13 @@ public class TeamMemberStatsResponse {
     private final long assists;
     private final long appearances;
 
-    public TeamMemberStatsResponse(TeamMember teamMember, long goals, long assists, long appearances) {
-        this.id = teamMember.getMember().getId();
-        this.username = teamMember.getMember().getUsername();
-        this.name = teamMember.getMember().getName();
-        this.mainPosition = teamMember.getMember().getMainPosition();
-        this.subPositions = teamMember.getMember().getSubPositions();
-        this.role = teamMember.getRole();
+    public TeamMemberStatsResponse(TeamMemberStatsProjection projection, Set<Position> subPositions,
+                                   long goals, long assists, long appearances) {
+        this.id = projection.getMemberId();
+        this.name = projection.getName();
+        this.mainPosition = projection.getMainPosition();
+        this.subPositions = Set.copyOf(subPositions);
+        this.role = projection.getRole();
         this.goals = goals;
         this.assists = assists;
         this.appearances = appearances;

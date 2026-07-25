@@ -2,25 +2,29 @@ package com.guenbon.jochuckhub.service;
 
 import com.guenbon.jochuckhub.dto.response.GoalRecordResponse;
 import com.guenbon.jochuckhub.dto.response.PageResponse;
+import com.guenbon.jochuckhub.dto.response.TeamMemberStatsProjection;
 import com.guenbon.jochuckhub.dto.response.TeamMemberStatsResponse;
-import com.guenbon.jochuckhub.entity.TeamMember;
-import com.guenbon.jochuckhub.exception.MemberNotFoundException;
+import com.guenbon.jochuckhub.entity.Position;
 import com.guenbon.jochuckhub.exception.ForbiddenException;
+import com.guenbon.jochuckhub.exception.MemberNotFoundException;
 import com.guenbon.jochuckhub.exception.TeamNotFoundException;
-import com.guenbon.jochuckhub.repository.goal.GoalRepository;
 import com.guenbon.jochuckhub.repository.MatchLineupEntryRepository;
 import com.guenbon.jochuckhub.repository.MemberRepository;
 import com.guenbon.jochuckhub.repository.TeamMemberRepository;
 import com.guenbon.jochuckhub.repository.TeamRepository;
+import com.guenbon.jochuckhub.repository.goal.GoalRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,48 +32,40 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class StatsService {
 
+    private static final int PAGE_SIZE = 20;
+
     private final TeamMemberRepository teamMemberRepository;
     private final GoalRepository goalRepository;
     private final MatchLineupEntryRepository matchLineupEntryRepository;
     private final MemberRepository memberRepository;
     private final TeamRepository teamRepository;
 
-    /**
-     * 팀원 목록 + 팀 기준 개인 통계 (골/어시스트/출전경기)
-     */
-    public List<TeamMemberStatsResponse> getTeamMemberStats(Long teamId) {
-        if (!teamRepository.existsById(teamId)) {
+    public List<TeamMemberStatsResponse> getTeamMemberStats(Long teamId, Long requesterId) {
+        if (!teamRepository.existsByIdAndDeletedFalse(teamId)) {
             throw new TeamNotFoundException();
         }
+        if (!teamMemberRepository.existsByTeamIdAndMemberId(teamId, requesterId)) {
+            throw new ForbiddenException("Only team members can view member statistics.");
+        }
 
-        List<TeamMember> teamMembers = teamMemberRepository.findAllByTeamId(teamId);
-
+        List<TeamMemberStatsProjection> members = teamMemberRepository.findTeamMemberStatsByTeamId(teamId);
+        List<Long> memberIds = members.stream().map(TeamMemberStatsProjection::getMemberId).toList();
+        Map<Long, Set<Position>> subPositionMap = getSubPositionMap(memberIds);
         Map<Long, Long> goalMap = toMap(goalRepository.countGoalsByTeam(teamId));
         Map<Long, Long> assistMap = toMap(goalRepository.countAssistsByTeam(teamId));
         Map<Long, Long> appearanceMap = toMap(matchLineupEntryRepository.countAppearancesByTeam(teamId));
 
-        return teamMembers.stream()
-                .map(tm -> new TeamMemberStatsResponse(
-                        tm,
-                        goalMap.getOrDefault(tm.getMember().getId(), 0L),
-                        assistMap.getOrDefault(tm.getMember().getId(), 0L),
-                        appearanceMap.getOrDefault(tm.getMember().getId(), 0L)
+        return members.stream()
+                .map(member -> new TeamMemberStatsResponse(
+                        member,
+                        subPositionMap.getOrDefault(member.getMemberId(), Set.of()),
+                        goalMap.getOrDefault(member.getMemberId(), 0L),
+                        assistMap.getOrDefault(member.getMemberId(), 0L),
+                        appearanceMap.getOrDefault(member.getMemberId(), 0L)
                 ))
                 .toList();
     }
 
-    /**
-     * 선수 개인 기록 조회 (골/어시스트, 다중 필터)
-     *
-     * @param memberId        조회할 선수 ID
-     * @param teamId          소속 팀 ID (homeTeam 기준)
-     * @param type            null=전체, "GOAL"=골만, "ASSIST"=어시스트만
-     * @param sortDirection   "DESC"(기본, 최신순) 또는 "ASC"(오래된순)
-     * @param opponentTeamId  특정 상대팀 ID
-     * @param startDate       날짜 범위 시작 (포함)
-     * @param endDate         날짜 범위 종료 (포함)
-     * @param relatedMemberId 해당 멤버와 함께한 기록만 (골→어시스터, 어시스트→득점자)
-     */
     public PageResponse<GoalRecordResponse> getGoalRecords(
             Long memberId, Long teamId,
             String type, String sortDirection,
@@ -80,20 +76,20 @@ public class StatsService {
         if (!memberRepository.existsById(memberId)) {
             throw new MemberNotFoundException();
         }
-        if (!teamRepository.existsById(teamId)) {
+        if (!teamRepository.existsByIdAndDeletedFalse(teamId)) {
             throw new TeamNotFoundException();
         }
         if (!teamMemberRepository.existsByTeamIdAndMemberId(teamId, requesterId)) {
-            throw new ForbiddenException("해당 팀 소속 멤버만 골 기록을 조회할 수 있습니다.");
+            throw new ForbiddenException("Only team members can view goal records.");
         }
         if (type != null && !"GOAL".equalsIgnoreCase(type) && !"ASSIST".equalsIgnoreCase(type)) {
-            throw new IllegalArgumentException("type은 GOAL 또는 ASSIST만 사용할 수 있습니다.");
+            throw new IllegalArgumentException("type must be GOAL or ASSIST.");
         }
         if (!"ASC".equalsIgnoreCase(sortDirection) && !"DESC".equalsIgnoreCase(sortDirection)) {
-            throw new IllegalArgumentException("sortDirection은 ASC 또는 DESC만 사용할 수 있습니다.");
+            throw new IllegalArgumentException("sortDirection must be ASC or DESC.");
         }
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            throw new IllegalArgumentException("startDate는 endDate보다 늦을 수 없습니다.");
+            throw new IllegalArgumentException("startDate must not be after endDate.");
         }
 
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
@@ -101,8 +97,23 @@ public class StatsService {
 
         return PageResponse.from(goalRepository.findGoalRecords(
                         teamId, memberId, type == null ? null : type.toUpperCase(), sortDirection.toUpperCase(),
-                        opponentTeamId, startDateTime, endDateTime, relatedMemberId, PageRequest.of(page, 20)),
+                        opponentTeamId, startDateTime, endDateTime, relatedMemberId, PageRequest.of(page, PAGE_SIZE)),
                 goal -> new GoalRecordResponse(goal, memberId));
+    }
+
+    private Map<Long, Set<Position>> getSubPositionMap(List<Long> memberIds) {
+        Map<Long, Set<Position>> result = new HashMap<>();
+        if (memberIds.isEmpty()) {
+            return result;
+        }
+        for (Object[] row : memberRepository.findSubPositionsByMemberIds(memberIds)) {
+            Long memberId = (Long) row[0];
+            Position position = (Position) row[1];
+            if (position != null) {
+                result.computeIfAbsent(memberId, ignored -> new HashSet<>()).add(position);
+            }
+        }
+        return result;
     }
 
     private Map<Long, Long> toMap(List<Object[]> rows) {

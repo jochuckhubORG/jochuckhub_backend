@@ -114,6 +114,8 @@ src/main/java/com/guenbon/jochuckhub/
 - `virtual=true`: 가상 팀 (서비스 미가입 외부 팀). `createdByTeamId`에 만든 팀 ID 저장
 - 가상 팀 이름 uniqueness: 동일 `createdByTeamId` 내에서만 적용
 - 가상 팀은 만든 팀에게만 검색 노출 (`searchByNameForTeam()` 쿼리)
+- `nameKey` DB unique 제약으로 실제 팀은 전체 이름, 가상 팀은 생성 팀 내 이름을 고유하게 보장
+- 삭제는 `deleted=true`, `deletedAt`을 기록하는 비활성화 방식이며 기존 경기 기록은 보존
 
 **Match** (테이블명: `match_record`)
 - `homeTeam`(실제 팀) + `opponentTeam`(실제 또는 가상 팀)
@@ -160,13 +162,13 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 |---|---:|---|---|
 | `AuthController` | 2 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback` | 사용자 검토 완료 |
 | `MemberController` | 6 | `GET /api/members?page=0`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records?page=0` | 리뷰 완료 · 사용자 미검토 |
-| `TeamController` | 9 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 리뷰 안함 |
+| `TeamController` | 11 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `GET /api/teams/{id}/join-requests`, `PATCH /api/teams/{id}/join-requests/{requestId}`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 리뷰 완료 · 사용자 미검토 |
 | `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 리뷰 안함 |
 | `MatchVoteController` | 4 | `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status` | 리뷰 안함 |
 | `MatchLineupController` | 3 | `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup` | 리뷰 안함 |
 | `TestDataController` | 2 | `POST /api/test/matches/{matchId}/lineup-setup`, `DELETE /api/test/matches/{matchId}/lineup-cleanup` | 리뷰 안함 |
 
-> 현재 소스 기준 전체 엔드포인트 수는 31개이다. 이 중 테스트 API 2개를 제외하면 서비스 API는 29개이다.
+> 현재 소스 기준 전체 엔드포인트 수는 33개이다. 이 중 테스트 API 2개를 제외하면 서비스 API는 31개이다.
 
 ### 인증
 | 메서드 | URL | 권한 |
@@ -192,11 +194,13 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 | `POST` | `/api/teams` | 인증 |
 | `GET` | `/api/teams` | 인증 (내 소속 팀만 반환) |
 | `GET` | `/api/teams/{id}` | 인증 (응답에 `currentUserRole` 포함) |
-| `GET` | `/api/teams/{id}/members` | 인증 (팀원 목록 + 골/어시스트/출전경기 통계) |
+| `GET` | `/api/teams/{id}/members` | 팀 소속 멤버 (팀원 목록 + 골/어시스트/출전경기 통계) |
 | `PUT` | `/api/teams/{id}` | OWNER |
-| `DELETE` | `/api/teams/{id}` | OWNER |
-| `GET` | `/api/teams/search?name=xxx[&myTeamId=yyy]` | 인증 (myTeamId 없으면 실제 팀만 검색) |
-| `POST` | `/api/teams/{id}/join` | 인증 (PLAYER로 가입) |
+| `DELETE` | `/api/teams/{id}` | OWNER (비활성화, 경기 기록 보존) |
+| `GET` | `/api/teams/search?name=xxx[&myTeamId=yyy]` | 인증 (`myTeamId`가 있으면 해당 팀 소속만 가상 팀 검색 가능) |
+| `POST` | `/api/teams/{id}/join` | 인증 (가입 요청 생성) |
+| `GET` | `/api/teams/{id}/join-requests` | OWNER/MANAGER (대기 중 가입 요청 목록) |
+| `PATCH` | `/api/teams/{id}/join-requests/{requestId}` | OWNER/MANAGER (`{ "approved": true\|false }`로 승인/거절; 승인 시 PLAYER 가입) |
 | `POST` | `/api/teams/virtual` | OWNER/MANAGER |
 
 ### 매치
@@ -242,7 +246,8 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 - `PageResponse<T>`: content, page, size, totalElements, totalPages, first, last
 - `TeamSummaryResponse`: id, name, virtual, memberCount
 - `TeamDetailResponse`: id, name, virtual, owner, managers[], memberCount, currentUserRole
-- `TeamMemberStatsResponse`: id, username, name, mainPosition, subPositions, role, goals, assists, appearances
+- `TeamMemberStatsResponse`: id, name, mainPosition, subPositions, role, goals, assists, appearances
+- `TeamJoinRequestResponse`: id, memberId, memberName, status, createdAt
 - `GoalRecordResponse`: matchId, matchDate, opponentTeamId, opponentTeamName, type(GOAL/ASSIST), relatedMemberId, relatedMemberName
 - `MatchResponse`: id, homeTeam, opponentTeam, matchDate, durationMinutes, matchEndTime, location, createdBy, voteDeadline
 - `MatchVoteResultResponse`: matchId, voteDeadline, voteClosed, matchStarted, attendVotes[], absentVotes[], notVotedMembers[], attendCount, absentCount, notVotedCount
