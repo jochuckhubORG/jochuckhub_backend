@@ -1,68 +1,66 @@
 # API 리뷰 및 반영 현황
 
-기준일: 2026-07-25
+기준일: 2026-07-26
 
-## 상태 정의
+이 문서는 테스트 전용 `TestDataController`를 제외한 서비스 API의 리뷰 상태와 반영 이력을 관리한다.
 
-- **리뷰 안함**: Codex의 컨트롤러 단위 리뷰 전
-- **리뷰 완료 · 사용자 미검토**: 리뷰와 후속 수정은 진행됐고, 사용자의 최종 확인 전
-- **사용자 검토 완료**: 사용자가 해당 컨트롤러 리뷰의 종료를 명시함
+## 상태 기준
 
-## AuthController — 사용자 검토 완료
+- `리뷰 안함`: 컨트롤러 단위 리뷰를 아직 제공하지 않음
+- `리뷰 완료 · 사용자 미검토`: 리뷰와 코드 반영은 끝났으나, 사용자의 최종 확인 선언이 없음
+- `사용자 검토 완료`: 사용자가 해당 컨트롤러의 리뷰를 확인하고 종료를 선언함
 
-- `GET /api/auth/kakao`, `GET /api/auth/kakao/callback`
-- CSRF 토큰 쿠키(`XSRF-TOKEN`)와 요청 헤더 검증을 적용했다.
-- 카카오 OAuth 요청 URI는 URI Builder로 만들고, 외부 API 요청·응답 및 오류를 로그로 남긴다.
-- 카카오 액세스 토큰 저장 및 라인업 메시지 발송 기능은 제거했다.
-- JWT 쿠키의 운영 `Secure=true` 전환은 TODO로 남겨 두었다.
+## 최종 교차 리뷰 결과
 
-## MemberController — 리뷰 완료 · 사용자 미검토
+2026-07-26에 `AuthController`, `MemberController`, `TeamController`, `MatchController`, `MatchVoteController`, `MatchLineupController`를 다시 교차 점검했다. 서비스 API 33개 모두 최초 리뷰와 사용자가 요청한 수정 반영까지 완료되어 있다.
 
-- `GET /api/members`는 최근 가입순, 페이지당 20건의 `PageResponse<MemberResponse>`를 반환한다.
-- 회원 응답에서 `username`을 제거했다.
-- 출석 점수와 골 기록은 팀 존재 여부 및 요청자 팀 소속을 검증한다.
-- 골 기록은 잘못된 정렬·유형과 잘못된 날짜 범위를 400으로 처리하고, 페이지당 20건으로 조회한다.
-- JPA Auditing으로 모든 주요 엔티티에 `createdAt`, `updatedAt`을 적용했다.
+| 컨트롤러 | API 수 | 상태 | 최종 점검 결과 |
+|---|---:|---|---|
+| `AuthController` | 4 | 사용자 검토 완료 | CSRF 쿠키/헤더 검증, OAuth state 검증, URI 인코딩, 카카오 외부 API 오류 분류·로그, JWT/refresh token 보안 로그 반영 |
+| `MemberController` | 6 | 사용자 검토 완료 | DTO 응답, 20건 페이지네이션, 팀 소속 검증, 입력값·날짜 범위 검증 반영 |
+| `TeamController` | 11 | 사용자 검토 완료 | 이름 고유 제약, 가입 요청 승인, 소속 검증, DTO 프로젝션, 비활성화 삭제 반영 |
+| `MatchController` | 5 | 사용자 검토 완료 | 팀 소속 검증, 자기 팀 경기/투표 마감 검증, 결과 조회 최적화, 낙관적 락 반영 |
+| `MatchVoteController` | 4 | 사용자 검토 완료 | 없는 경기 404, 마감 시각 경계 처리, 투표 결과 DTO 프로젝션 반영 |
+| `MatchLineupController` | 3 | 사용자 검토 완료 | 팀 소속·참석자·포메이션 검증, 일괄 최근 점수 조회, 회원 fetch join 반영 |
 
-## TeamController — 리뷰 완료 · 사용자 미검토
+`TestDataController`의 2개 API는 테스트 지원 용도이므로 본 리뷰 범위에서 제외했다.
 
-- 실제 팀명은 전체 범위에서, 가상 팀명은 생성 팀 범위에서 DB 고유 키로 보장한다.
-- 팀 삭제는 물리 삭제가 아닌 비활성화이며, 기존 경기 기록은 유지한다.
-- `POST /api/teams/{id}/join`은 가입 요청을 만들고 즉시 가입시키지 않는다.
-- `GET /api/teams/{id}/join-requests`와 `PATCH /api/teams/{id}/join-requests/{requestId}`로 OWNER/MANAGER가 요청을 조회하고 승인 또는 거절한다.
-- 가상 팀 검색의 `myTeamId`와 팀원 통계 조회 모두 요청자 팀 소속을 검증한다.
-- 내 팀 목록은 팀원 수를 포함한 DTO 프로젝션 집계 쿼리로, 팀원 통계는 조회 전용 DTO와 일괄 서브 포지션 조회로 N+1을 제거한다.
+## 컨트롤러별 코드 추적 기준
 
-## MatchController — 리뷰 완료 · 사용자 미검토
+| 컨트롤러 | 기본 추적 순서 |
+|---|---|
+| Auth | `AuthController` → `KakaoAuthService` → `MemberRepository` / `JwtTokenProvider` → `SecurityConfig` / JWT 필터 |
+| Member | `MemberController` → `MemberService` → Member·Goal·MatchVote Repository → 응답 DTO / `PageResponse` |
+| Team | `TeamController` → `TeamService` → Team·TeamMember·JoinRequest Repository → Team/TeamMember 엔티티와 DTO 프로젝션 |
+| Match | `MatchController` → `MatchService` / `MatchResultService` → Match·Goal Repository → Match·Goal 엔티티와 결과 DTO |
+| MatchVote | `MatchVoteController` → `MatchVoteService` → MatchVote Repository → 투표 집계 DTO / 팀 권한 검증 |
+| MatchLineup | `MatchLineupController` → `MatchLineupService` → LineupEntry·MatchVote Repository → 라인업 엔티티·포지션 검증 |
 
-- `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result`
-- 홈팀과 상대팀의 동일성, 투표 마감 시각(현재 시각 이후·경기 한 시간 전 이내)을 검증한다.
-- 매치 목록은 팀 존재·요청자 소속을 검증하고, DTO 프로젝션 집계가 아닌 단일 DTO 프로젝션 조회로 N+1을 제거한다.
-- 단건 매치 조회는 홈팀 소속을 검증하고, 상세 연관관계를 fetch join으로 가져온다.
-- 결과 입력은 지각과 무단불참 명단의 중복을 400으로 처리한다.
-- 결과 조회는 매치 존재를 먼저 확인해 없는 매치에 `MATCH_NOT_FOUND` 404를 반환하고, 골·득점자·어시스트를 fetch join으로 조회한다.
-- 경기 결과는 `@Version` 낙관적 락으로 보호한다. 프론트는 결과 조회 응답의 `version`을 결과 저장 요청에 포함하고, 충돌 시 `409 OPTIMISTIC_LOCK_CONFLICT`를 받아 새로고침 후 재시도한다.
+## 공통 검증 사항
 
-## MatchVoteController — 리뷰 완료 · 사용자 미검토
+- 인증 필요 API는 Spring Security의 JWT 인증을 거치며, 쿠키 기반 상태 변경 요청에는 `XSRF-TOKEN` 쿠키와 요청 헤더를 비교하는 CSRF 방어가 적용되어 있다.
+- 권한이 필요한 팀·경기·투표·라인업 API는 요청자의 해당 팀 소속 및 OWNER/MANAGER 역할을 서비스 계층에서 검증한다.
+- `MEMBER_NOT_FOUND`, `TEAM_NOT_FOUND`, `MATCH_NOT_FOUND`, `FORBIDDEN`, 검증 오류, DB 충돌 및 낙관적 락 충돌이 일관된 오류 응답으로 변환된다.
+- 카카오 외부 API 호출은 정상 완료·실패·네트워크 오류를 구분해 로그로 남기며, 토큰과 인가 코드 같은 비밀값은 로그에 남기지 않는다.
 
-- `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status`
-- 홈팀 구성원만 투표·투표 현황을 조회하고, OWNER/MANAGER만 경기 시작 후 실제 출석 상태를 기록한다.
-- 없는 매치는 `MATCH_NOT_FOUND` 404로 처리한다.
-- 투표 마감 시각부터 투표를 닫고, 투표 현황은 투표·팀원 이름 DTO 프로젝션으로 조회해 N+1을 제거한다.
+## JWT 발급·검증 재점검
 
-## MatchLineupController — 리뷰 완료 · 사용자 미검토
+- 발급 흐름은 `AuthController` → `KakaoAuthService` → `RefreshTokenService` → `JwtTokenProvider.generateAccessToken()`이다. 액세스 JWT에는 subject, 발급 시각, 만료 시각, `token_type=access`가 서명되어 15분 동안 `accessToken` HttpOnly 쿠키로 전달된다.
+- 리프레시 토큰은 14일 유효한 512비트 난수이며 평문 대신 SHA-256 해시만 DB에 저장한다. `POST /api/auth/refresh`는 DB 행 잠금으로 동시 재발급을 막고, 기존 토큰을 삭제한 뒤 새 토큰으로 회전한다.
+- 검증 흐름은 `JwtAuthenticationFilter` → `JwtTokenProvider.validateAndGetUsername()` → `CustomUserDetailsService`다. 서명·형식·만료 오류는 SecurityContext를 비우고 보안 이벤트 로그를 남긴 뒤, 보호 API에서 401로 처리한다.
+- 로그아웃은 refresh token DB 레코드와 두 인증 쿠키를 모두 삭제한다. 강제 로그아웃이 필요할 때는 해당 회원의 refresh token 레코드를 제거하면 다음 액세스 토큰 만료 뒤 재발급을 차단할 수 있다.
+- JWT 서명 키는 `jwt.secret`의 Base64 값을 디코딩해 사용한다. 기존 문자열 바이트 방식으로 발급한 access token은 새 배포 후 유효하지 않으므로 사용자는 한 번 다시 로그인해야 한다.
 
-- `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup`
-- 자동 생성과 수동 저장은 OWNER/MANAGER 및 투표 마감 조건을 검증한다.
-- 수동 저장은 선수의 홈팀 소속·ATTEND 투표 여부, 쿼터 내 선수 중복, 4-3-3 포메이션 슬롯을 검증한다.
-- 라인업 조회는 홈팀 소속을 검증하고, 엔트리와 회원을 fetch join으로 조회한다. 부포지션은 `@BatchSize(size = 20)`을 사용한다.
-- 자동 생성의 최근 8경기 점수는 현재 경기 이전의 완료된 경기만 일괄 집계한다.
+## 남은 개선 항목
 
-## 검증
+- 카카오 OAuth 시작 요청은 256비트 난수 `state`를 HttpOnly·SameSite=Lax 쿠키에 5분 동안 저장하고, 콜백의 `state`와 상수 시간 비교로 검증한다. 불일치·누락 시 로그인을 중단하고 쿠키를 즉시 제거한다.
+- 운영 배포 전에는 두 인증 쿠키의 `secure=true` 전환, 새 refresh token 테이블·감사 컬럼·팀 관련 컬럼의 운영 DB 마이그레이션, 경기 결과 수정 화면의 `version` 전송을 확인해야 한다.
 
-- `./gradlew.bat test` 성공
-- 최신 반영 커밋: `8da26b0`, `7628f3c`
+## 검증 및 반영 커밋
 
-## 다음 확인
+- `./gradlew.bat test`를 각 수정 묶음 이후 실행해 성공을 확인했다. OAuth `state` 반영 후에도 2026-07-26에 성공을 확인했다.
+- 주요 반영 커밋: `a9aa232` (인증/CSRF), `ebf38bc`·`a8cf37b` (회원/감사), `8da26b0`·`7628f3c` (팀), `3a3bb8b` (경기/결과), `104e25b` (투표), `be0627d` (라인업).
 
-MemberController와 TeamController는 사용자가 검토 완료를 선언하면 `AGENTS.md`의 상태를 **사용자 검토 완료**로 변경한다.
+## 사용자 최종 확인 대기
+
+테스트 전용 `TestDataController`를 제외한 모든 서비스 컨트롤러는 사용자 검토 완료 상태다.

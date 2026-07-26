@@ -1,7 +1,6 @@
 package com.guenbon.jochuckhub.service;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.guenbon.jochuckhub.config.jwt.JwtTokenProvider;
 import com.guenbon.jochuckhub.config.logging.ExternalApiLogger;
 import com.guenbon.jochuckhub.dto.response.LoginResponse;
 import com.guenbon.jochuckhub.entity.Member;
@@ -31,7 +30,7 @@ public class KakaoAuthService {
     private static final String USER_INFO_URL = "https://kapi.kakao.com/v2/user/me";
 
     private final MemberRepository memberRepository;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenService refreshTokenService;
     private final ExternalApiLogger externalApiLogger;
     private final RestClient restClient = RestClient.create();
 
@@ -71,8 +70,8 @@ public class KakaoAuthService {
                             .build());
                 });
 
-        String token = jwtTokenProvider.generateToken(member.getUsername());
-        return new LoginResponse(token, member.getId(), isNewMemberRef[0]);
+        RefreshTokenService.TokenPair tokenPair = refreshTokenService.issue(member);
+        return new LoginResponse(tokenPair.accessToken(), tokenPair.refreshToken(), member.getId(), isNewMemberRef[0]);
     }
 
     private String getKakaoAccessToken(String code) {

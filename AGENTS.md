@@ -38,7 +38,7 @@ kakao.client-secret=<kakao_client_secret>
 `src/main/resources/static/test-login.html` — 앱 실행 후 `http://localhost:8080/test-login.html`에서 접근 가능.
 
 - 카카오 로그인 버튼 → `/api/auth/kakao` 리다이렉트 → 카카오 인증 → `/api/auth/kakao/callback` → 이 페이지로 복귀
-- 로그인 성공 시 JWT가 `accessToken` HttpOnly 쿠키로 저장됨
+- 로그인 성공 시 짧은 수명의 JWT가 `accessToken` HttpOnly 쿠키로, 리프레시 토큰이 `refreshToken` HttpOnly 쿠키로 저장됨
 - 회원 목록·팀 목록 조회, 팀 생성 등 기본 API를 브라우저에서 직접 테스트할 수 있음
 - 같은 Origin(`localhost:8080`)이므로 CORS 설정 없이 동작
 
@@ -66,13 +66,14 @@ src/main/java/com/guenbon/jochuckhub/
 
 ## 인증 흐름
 
-1. 프론트엔드가 `GET /api/auth/kakao`로 사용자를 리다이렉트
-2. 사용자가 카카오 로그인 → 카카오가 `GET /api/auth/kakao/callback?code=xxx`로 리다이렉트
+1. 프론트엔드가 `GET /api/auth/kakao`로 사용자를 리다이렉트. 서버는 256비트 난수 `state`를 HttpOnly 쿠키(5분)와 카카오 인가 요청에 함께 설정한다.
+2. 사용자가 카카오 로그인 → 카카오가 `GET /api/auth/kakao/callback?code=xxx&state=xxx`로 리다이렉트. 서버는 콜백 `state`와 쿠키 값을 검증한 뒤 쿠키를 제거한다.
 3. 서버: 인가코드 → 카카오 액세스 토큰 → 카카오 사용자 정보 → Member 조회/생성 → JWT 발급
-4. JWT를 `accessToken` **HttpOnly 쿠키**로 Set-Cookie → `kakao.frontend-redirect-uri`로 리다이렉트
+4. 짧은 수명의 JWT를 `accessToken` HttpOnly 쿠키로, 회전 가능한 불투명 토큰을 `refreshToken` HttpOnly 쿠키(`/api/auth` 경로)로 Set-Cookie → `kakao.frontend-redirect-uri`로 리다이렉트
    - 신규 가입이면 `?newMember=true` 파라미터 포함
 5. 이후 모든 요청: 브라우저가 쿠키를 자동 포함 (`credentials: include`)
    - `JwtAuthenticationFilter`에서 쿠키의 `accessToken`을 추출해 인증 처리
+   - 액세스 토큰 만료 시 `POST /api/auth/refresh`가 refresh token을 회전하고 새 쿠키를 발급
 
 공개 엔드포인트: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/test-login.html`
 
@@ -164,21 +165,25 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 
 | 컨트롤러 | API 수 | API | 리뷰 현황 |
 |---|---:|---|---|
-| `AuthController` | 2 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback` | 사용자 검토 완료 |
-| `MemberController` | 6 | `GET /api/members?page=0`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records?page=0` | 리뷰 완료 · 사용자 미검토 |
-| `TeamController` | 11 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `GET /api/teams/{id}/join-requests`, `PATCH /api/teams/{id}/join-requests/{requestId}`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 리뷰 완료 · 사용자 미검토 |
-| `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 리뷰 완료 · 사용자 미검토 |
-| `MatchVoteController` | 4 | `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status` | 리뷰 완료 · 사용자 미검토 |
-| `MatchLineupController` | 3 | `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup` | 리뷰 완료 · 사용자 미검토 |
+| `AuthController` | 4 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout` | 사용자 검토 완료 |
+| `MemberController` | 6 | `GET /api/members?page=0`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records?page=0` | 사용자 검토 완료 |
+| `TeamController` | 11 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `GET /api/teams/{id}/join-requests`, `PATCH /api/teams/{id}/join-requests/{requestId}`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 사용자 검토 완료 |
+| `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 사용자 검토 완료 |
+| `MatchVoteController` | 4 | `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status` | 사용자 검토 완료 |
+| `MatchLineupController` | 3 | `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup` | 사용자 검토 완료 |
 | `TestDataController` | 2 | `POST /api/test/matches/{matchId}/lineup-setup`, `DELETE /api/test/matches/{matchId}/lineup-cleanup` | 리뷰 안함 |
 
-> 현재 소스 기준 전체 엔드포인트 수는 33개이다. 이 중 테스트 API 2개를 제외하면 서비스 API는 31개이다.
+> 현재 소스 기준 전체 엔드포인트 수는 35개이다. 이 중 테스트 API 2개를 제외하면 서비스 API는 33개이다.
+>
+> 2026-07-26 최종 교차 리뷰는 `TestDataController`를 제외한 6개 서비스 컨트롤러를 대상으로 완료했다. 사용자 요청에 따른 코드 수정과 사용자 최종 확인이 모두 반영되었다.
 
 ### 인증
 | 메서드 | URL | 권한 |
 |--------|-----|------|
 | `GET` | `/api/auth/kakao` | 공개 (카카오 로그인 페이지로 리다이렉트) |
 | `GET` | `/api/auth/kakao/callback?code=xxx` | 공개 (카카오 콜백 → JWT 쿠키 발급) |
+| `POST` | `/api/auth/refresh` | 공개 (CSRF 토큰 필요, refresh token 회전 → 새 인증 쿠키 발급) |
+| `POST` | `/api/auth/logout` | 공개 (CSRF 토큰 필요, refresh token 폐기 및 인증 쿠키 삭제) |
 
 ### 회원
 | 메서드 | URL | 권한 |
@@ -245,7 +250,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 - `SaveLineupRequest`: quarters[{quarter, players[{memberId, position}]}]
 
 **응답 DTO**
-- `LoginResponse`: accessToken, tokenType, memberId, isNewMember
+- `LoginResponse`: accessToken, refreshToken, tokenType, memberId, isNewMember
 - `MemberResponse`: id, name, mainPosition, subPositions
 - `PageResponse<T>`: content, page, size, totalElements, totalPages, first, last
 - `TeamSummaryResponse`: id, name, virtual, memberCount
@@ -269,6 +274,7 @@ ForbiddenException               → 403  FORBIDDEN
 IllegalArgumentException         → 400  BAD_REQUEST
 DataIntegrityViolationException  → 409  DATA_INTEGRITY_VIOLATION
 OptimisticLockingFailureException → 409 OPTIMISTIC_LOCK_CONFLICT
+InvalidRefreshTokenException       → 401 INVALID_REFRESH_TOKEN
 Exception (기타)                  → 500  INTERNAL_SERVER_ERROR
 ```
 응답 형식: `{ "code": "...", "message": "..." }`

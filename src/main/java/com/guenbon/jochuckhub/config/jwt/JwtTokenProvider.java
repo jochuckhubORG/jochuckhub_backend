@@ -1,13 +1,13 @@
 package com.guenbon.jochuckhub.config.jwt;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
@@ -19,27 +19,29 @@ public class JwtTokenProvider {
     public JwtTokenProvider(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration}") long expiration) {
-        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.secretKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
         this.expiration = expiration;
     }
 
-    public String generateToken(String username) {
+    public String generateAccessToken(String username) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(username)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expiration))
+                .claim("token_type", "access")
                 .signWith(secretKey)
                 .compact();
     }
 
-    public String getUsername(String token) {
-        return getClaims(token).getSubject();
-    }
-
-    public boolean validateToken(String token) {
-        getClaims(token);
-        return true;
+    public String validateAndGetUsername(String token) {
+        Claims claims = getClaims(token);
+        if (!"access".equals(claims.get("token_type", String.class))
+                || claims.getSubject() == null
+                || claims.getSubject().isBlank()) {
+            throw new IllegalArgumentException("Invalid access token.");
+        }
+        return claims.getSubject();
     }
 
     private Claims getClaims(String token) {

@@ -34,16 +34,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (StringUtils.hasText(token)) {
             try {
-                if (jwtTokenProvider.validateToken(token)) {
-                    String username = jwtTokenProvider.getUsername(token);
-                    CustomUserDetails userDetails =
-                            (CustomUserDetails) customUserDetailsService.loadUserByUsername(username);
-                    UsernamePasswordAuthenticationToken auth =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-                    securityEventLogger.jwtAuthenticationSucceeded(
-                            username, request.getMethod(), request.getRequestURI());
-                }
+                String username = jwtTokenProvider.validateAndGetUsername(token);
+                CustomUserDetails userDetails =
+                        (CustomUserDetails) customUserDetailsService.loadUserByUsername(username);
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(auth);
+                securityEventLogger.jwtAuthenticationSucceeded(
+                        username, request.getMethod(), request.getRequestURI());
             } catch (ExpiredJwtException e) {
                 SecurityContextHolder.clearContext();
                 logFailure("expired", request);
