@@ -11,6 +11,14 @@ public interface GoalRepository extends JpaRepository<Goal, Long>, QueryDslGoalR
 
     List<Goal> findAllByMatchId(Long matchId);
 
+    @Query("""
+            SELECT g FROM Goal g
+            LEFT JOIN FETCH g.scorer
+            LEFT JOIN FETCH g.assister
+            WHERE g.match.id = :matchId
+            """)
+    List<Goal> findAllByMatchIdWithScorerAndAssister(@Param("matchId") Long matchId);
+
     void deleteAllByMatchId(Long matchId);
 
     /** 팀 경기 기준 멤버별 골 집계 — [memberId, count] */

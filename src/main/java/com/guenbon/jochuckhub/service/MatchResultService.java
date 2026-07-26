@@ -5,15 +5,20 @@ import com.guenbon.jochuckhub.dto.request.RecordMatchResultRequest;
 import com.guenbon.jochuckhub.dto.response.MatchResultResponse;
 import com.guenbon.jochuckhub.entity.*;
 import com.guenbon.jochuckhub.exception.MemberNotFoundException;
+import com.guenbon.jochuckhub.exception.MatchNotFoundException;
 import com.guenbon.jochuckhub.repository.*;
 import com.guenbon.jochuckhub.repository.goal.GoalRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -28,11 +33,15 @@ public class MatchResultService {
     private final TeamMemberRepository teamMemberRepository;
     private final MemberRepository memberRepository;
     private final TeamService teamService;
+    private final EntityManager entityManager;
 
     @Transactional
     public MatchResultResponse recordResult(Long matchId, RecordMatchResultRequest request, Long requesterId) {
         Match match = findMatch(matchId);
         teamService.verifyOwnerOrManager(match.getHomeTeam().getId(), requesterId);
+        if (!Objects.equals(request.getVersion(), match.getVersion())) {
+            throw new OptimisticLockingFailureException("The match result was modified by another user.");
+        }
 
         if (LocalDateTime.now().isBefore(match.getMatchEndTime())) {
             throw new IllegalArgumentException("경기가 아직 종료되지 않았습니다.");
@@ -49,6 +58,12 @@ public class MatchResultService {
 
         Set<Long> lateIds = Set.copyOf(request.getLateMemberIds());
         Set<Long> noShowIds = Set.copyOf(request.getNoShowMemberIds());
+
+        Set<Long> overlappingIds = new HashSet<>(lateIds);
+        overlappingIds.retainAll(noShowIds);
+        if (!overlappingIds.isEmpty()) {
+            throw new IllegalArgumentException("A member cannot be marked both late and no-show.");
+        }
 
         // late/no-show는 반드시 ATTEND 투표자여야 함
         for (Long id : lateIds) {
@@ -100,11 +115,14 @@ public class MatchResultService {
             }
         }
 
-        return new MatchResultResponse(matchId, savedGoals);
+        match.markResultUpdated();
+        entityManager.flush();
+        return new MatchResultResponse(match, savedGoals);
     }
 
     public MatchResultResponse getResult(Long matchId) {
-        return new MatchResultResponse(matchId, goalRepository.findAllByMatchId(matchId));
+        Match match = findMatch(matchId);
+        return new MatchResultResponse(match, goalRepository.findAllByMatchIdWithScorerAndAssister(matchId));
     }
 
     private Goal buildGoal(Match match, GoalRequest gr, Set<Long> attendVoterIds, Set<Long> noShowIds) {
@@ -142,6 +160,6 @@ public class MatchResultService {
 
     private Match findMatch(Long matchId) {
         return matchRepository.findById(matchId)
-                .orElseThrow(() -> new IllegalArgumentException("매치를 찾을 수 없습니다."));
+                .orElseThrow(MatchNotFoundException::new);
     }
 }

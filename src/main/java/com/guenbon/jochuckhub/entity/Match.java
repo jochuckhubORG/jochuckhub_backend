@@ -18,6 +18,9 @@ public class Match extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "home_team_id", nullable = false)
     private Team homeTeam;
@@ -43,6 +46,9 @@ public class Match extends BaseTimeEntity {
     @Column(nullable = false)
     private int durationMinutes;
 
+    @Column(name = "result_updated_at")
+    private LocalDateTime resultUpdatedAt;
+
     @Builder
     public Match(Team homeTeam, Team opponentTeam, LocalDateTime matchDate, String location, Member createdBy, LocalDateTime voteDeadline, int durationMinutes) {
         this.homeTeam = homeTeam;
@@ -64,5 +70,9 @@ public class Match extends BaseTimeEntity {
             return latestAllowed;
         }
         return voteDeadline;
+    }
+
+    public void markResultUpdated() {
+        this.resultUpdatedAt = LocalDateTime.now();
     }
 }

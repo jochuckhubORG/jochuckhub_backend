@@ -33,6 +33,16 @@
 - 가상 팀 검색의 `myTeamId`와 팀원 통계 조회 모두 요청자 팀 소속을 검증한다.
 - 내 팀 목록은 팀원 수를 포함한 DTO 프로젝션 집계 쿼리로, 팀원 통계는 조회 전용 DTO와 일괄 서브 포지션 조회로 N+1을 제거한다.
 
+## MatchController — 리뷰 완료 · 사용자 미검토
+
+- `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result`
+- 홈팀과 상대팀의 동일성, 투표 마감 시각(현재 시각 이후·경기 한 시간 전 이내)을 검증한다.
+- 매치 목록은 팀 존재·요청자 소속을 검증하고, DTO 프로젝션 집계가 아닌 단일 DTO 프로젝션 조회로 N+1을 제거한다.
+- 단건 매치 조회는 홈팀 소속을 검증하고, 상세 연관관계를 fetch join으로 가져온다.
+- 결과 입력은 지각과 무단불참 명단의 중복을 400으로 처리한다.
+- 결과 조회는 매치 존재를 먼저 확인해 없는 매치에 `MATCH_NOT_FOUND` 404를 반환하고, 골·득점자·어시스트를 fetch join으로 조회한다.
+- 경기 결과는 `@Version` 낙관적 락으로 보호한다. 프론트는 결과 조회 응답의 `version`을 결과 저장 요청에 포함하고, 충돌 시 `409 OPTIMISTIC_LOCK_CONFLICT`를 받아 새로고침 후 재시도한다.
+
 ## 검증
 
 - `./gradlew.bat test` 성공

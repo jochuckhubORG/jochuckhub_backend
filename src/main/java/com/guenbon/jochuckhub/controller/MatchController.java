@@ -33,13 +33,17 @@ public class MatchController {
     }
 
     @GetMapping
-    public ResponseEntity<List<MatchResponse>> getMatchesByTeam(@RequestParam Long teamId) {
-        return ResponseEntity.ok(matchService.getMatchesByTeam(teamId));
+    public ResponseEntity<List<MatchResponse>> getMatchesByTeam(
+            @RequestParam Long teamId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(matchService.getMatchesByTeam(teamId, userDetails.getMemberId()));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<MatchResponse> getMatch(@PathVariable Long id) {
-        return ResponseEntity.ok(matchService.getMatch(id));
+    public ResponseEntity<MatchResponse> getMatch(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(matchService.getMatch(id, userDetails.getMemberId()));
     }
 
     // 매치 종료 후 결과 입력 (최초 입력 및 수정 모두 동일 엔드포인트)

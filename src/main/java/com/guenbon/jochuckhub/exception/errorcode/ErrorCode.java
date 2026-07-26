@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 public enum ErrorCode {
 
+    MATCH_NOT_FOUND("match not found"),
     MEMBER_NOT_FOUND("member not found"),
     TEAM_NOT_FOUND("해당하는 팀을 찾을 수 없습니다."),
 

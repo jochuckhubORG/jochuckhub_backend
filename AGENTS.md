@@ -124,6 +124,7 @@ src/main/java/com/guenbon/jochuckhub/
 - `voteDeadline`: null이면 자동으로 matchDate - 1시간 사용 (`getEffectiveVoteDeadline()`)
 - 생성 조건: OWNER/MANAGER만, 현재 시각 기준 최소 2시간 이후
 - 상대 팀이 가상 팀이면 반드시 내 팀이 만든 가상 팀이어야 함
+- 경기 결과 저장은 `@Version` 기반 낙관적 락을 사용하며, 결과 조회 응답의 `version`을 저장 요청에 포함해야 함
 
 **MatchVote**
 - `(match_id, member_id)` unique constraint
@@ -166,7 +167,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 | `AuthController` | 2 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback` | 사용자 검토 완료 |
 | `MemberController` | 6 | `GET /api/members?page=0`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records?page=0` | 리뷰 완료 · 사용자 미검토 |
 | `TeamController` | 11 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `GET /api/teams/{id}/join-requests`, `PATCH /api/teams/{id}/join-requests/{requestId}`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 리뷰 완료 · 사용자 미검토 |
-| `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 리뷰 안함 |
+| `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 리뷰 완료 · 사용자 미검토 |
 | `MatchVoteController` | 4 | `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status` | 리뷰 안함 |
 | `MatchLineupController` | 3 | `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup` | 리뷰 안함 |
 | `TestDataController` | 2 | `POST /api/test/matches/{matchId}/lineup-setup`, `DELETE /api/test/matches/{matchId}/lineup-cleanup` | 리뷰 안함 |
@@ -210,8 +211,8 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 | 메서드 | URL | 권한 |
 |--------|-----|------|
 | `POST` | `/api/matches` | OWNER/MANAGER |
-| `GET` | `/api/matches?teamId=xxx` | 인증 |
-| `GET` | `/api/matches/{id}` | 인증 |
+| `GET` | `/api/matches?teamId=xxx` | 팀 소속 멤버 |
+| `GET` | `/api/matches/{id}` | 홈팀 소속 멤버 |
 | `PUT` | `/api/matches/{id}/result` | OWNER/MANAGER (경기 종료 후) |
 | `GET` | `/api/matches/{id}/result` | 인증 |
 
@@ -239,7 +240,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 - `CreateMatchRequest`: homeTeamId, opponentTeamId, matchDate, location, durationMinutes, voteDeadline
 - `MatchVoteRequest`: attendStatus
 - `UpdateActualStatusRequest`: actualStatus
-- `RecordMatchResultRequest`: goals[], lateMemberIds[], noShowMemberIds[]
+- `RecordMatchResultRequest`: version, goals[], lateMemberIds[], noShowMemberIds[]
 - `GoalRequest`: opponentGoal, scorerMemberId, assisterMemberId
 - `SaveLineupRequest`: quarters[{quarter, players[{memberId, position}]}]
 
@@ -252,10 +253,10 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 - `TeamMemberStatsResponse`: id, name, mainPosition, subPositions, role, goals, assists, appearances
 - `TeamJoinRequestResponse`: id, memberId, memberName, status, createdAt
 - `GoalRecordResponse`: matchId, matchDate, opponentTeamId, opponentTeamName, type(GOAL/ASSIST), relatedMemberId, relatedMemberName
-- `MatchResponse`: id, homeTeam, opponentTeam, matchDate, durationMinutes, matchEndTime, location, createdBy, voteDeadline
+- `MatchResponse`: id, version, homeTeam, opponentTeam, matchDate, durationMinutes, matchEndTime, location, createdBy, voteDeadline
 - `MatchVoteResultResponse`: matchId, voteDeadline, voteClosed, matchStarted, attendVotes[], absentVotes[], notVotedMembers[], attendCount, absentCount, notVotedCount
 - `MatchLineupResponse`: quarters[{quarter, players[{memberId, memberName, assignedPosition, positionFit}]}]
-- `MatchResultResponse`: matchId, homeScore, opponentScore, goals[]
+- `MatchResultResponse`: matchId, version, homeScore, opponentScore, goals[]
 
 ## 예외 처리
 
@@ -263,9 +264,11 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 MethodArgumentNotValidException  → 400  VALIDATION_ERROR
 MemberNotFoundException          → 404  MEMBER_NOT_FOUND
 TeamNotFoundException            → 404  TEAM_NOT_FOUND
+MatchNotFoundException           → 404  MATCH_NOT_FOUND
 ForbiddenException               → 403  FORBIDDEN
 IllegalArgumentException         → 400  BAD_REQUEST
 DataIntegrityViolationException  → 409  DATA_INTEGRITY_VIOLATION
+OptimisticLockingFailureException → 409 OPTIMISTIC_LOCK_CONFLICT
 Exception (기타)                  → 500  INTERNAL_SERVER_ERROR
 ```
 응답 형식: `{ "code": "...", "message": "..." }`

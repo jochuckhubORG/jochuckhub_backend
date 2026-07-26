@@ -9,6 +9,9 @@ import java.util.List;
 @Getter
 public class RecordMatchResultRequest {
 
+    @NotNull(message = "version is required.")
+    private Long version;
+
     @NotNull(message = "골 목록은 필수입니다. (없으면 빈 배열 전달)")
     private List<GoalRequest> goals;
 

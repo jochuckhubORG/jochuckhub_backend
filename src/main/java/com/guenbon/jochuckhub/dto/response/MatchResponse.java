@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class MatchResponse {
 
     private final Long id;
+    private final Long version;
     private final TeamInfo homeTeam;
     private final TeamInfo opponentTeam;
     private final LocalDateTime matchDate;
@@ -20,6 +21,7 @@ public class MatchResponse {
 
     public MatchResponse(Match match) {
         this.id = match.getId();
+        this.version = match.getVersion();
         this.homeTeam = new TeamInfo(match.getHomeTeam().getId(), match.getHomeTeam().getName(), false);
         this.opponentTeam = new TeamInfo(match.getOpponentTeam().getId(), match.getOpponentTeam().getName(),
                 match.getOpponentTeam().isVirtual());
@@ -29,6 +31,25 @@ public class MatchResponse {
         this.location = match.getLocation();
         this.createdBy = match.getCreatedBy().getName();
         this.voteDeadline = match.getEffectiveVoteDeadline();
+    }
+
+    public MatchResponse(Long id,
+                         Long homeTeamId, String homeTeamName,
+                         Long opponentTeamId, String opponentTeamName, boolean opponentTeamVirtual,
+                         LocalDateTime matchDate, int durationMinutes, String location,
+                         String createdBy, LocalDateTime voteDeadline, Long version) {
+        this.id = id;
+        this.version = version;
+        this.homeTeam = new TeamInfo(homeTeamId, homeTeamName, false);
+        this.opponentTeam = new TeamInfo(opponentTeamId, opponentTeamName, opponentTeamVirtual);
+        this.matchDate = matchDate;
+        this.durationMinutes = durationMinutes;
+        this.matchEndTime = matchDate.plusMinutes(durationMinutes);
+        this.location = location;
+        this.createdBy = createdBy;
+        this.voteDeadline = voteDeadline == null || voteDeadline.isAfter(matchDate.minusHours(1))
+                ? matchDate.minusHours(1)
+                : voteDeadline;
     }
 
     @Getter
