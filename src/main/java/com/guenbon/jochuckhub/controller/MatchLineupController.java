@@ -45,7 +45,9 @@ public class MatchLineupController {
 
     @GetMapping
     @Operation(summary = "라인업 조회")
-    public ResponseEntity<MatchLineupResponse> getLineup(@PathVariable Long matchId) {
-        return ResponseEntity.ok(matchLineupService.getLineup(matchId));
+    public ResponseEntity<MatchLineupResponse> getLineup(
+            @PathVariable Long matchId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(matchLineupService.getLineup(matchId, userDetails.getMemberId()));
     }
 }

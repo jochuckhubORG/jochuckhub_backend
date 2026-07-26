@@ -8,7 +8,13 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface MatchLineupEntryRepository extends JpaRepository<MatchLineupEntry, Long> {
-    List<MatchLineupEntry> findAllByMatchId(Long matchId);
+    @Query("""
+            SELECT e FROM MatchLineupEntry e
+            JOIN FETCH e.member
+            WHERE e.match.id = :matchId
+            ORDER BY e.quarter, e.position, e.id
+            """)
+    List<MatchLineupEntry> findAllByMatchId(@Param("matchId") Long matchId);
     void deleteByMatchId(Long matchId);
 
     /** 팀 경기 기준 멤버별 출전경기 수 집계 — [memberId, count] */

@@ -10,6 +10,7 @@ import com.guenbon.jochuckhub.entity.Member;
 import com.guenbon.jochuckhub.entity.Position;
 import com.guenbon.jochuckhub.entity.TeamRole;
 import com.guenbon.jochuckhub.exception.ForbiddenException;
+import com.guenbon.jochuckhub.exception.MatchNotFoundException;
 import com.guenbon.jochuckhub.repository.MatchLineupEntryRepository;
 import com.guenbon.jochuckhub.repository.MatchRepository;
 import com.guenbon.jochuckhub.repository.MatchVoteRepository;
@@ -23,8 +24,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 @Service
@@ -48,7 +53,7 @@ public class MatchLineupService {
 
     @Transactional
     public MatchLineupResponse generateLineup(Long matchId, Long requesterId) {
-        Match match = findMatch(matchId);
+        Match match = findExistingMatch(matchId);
         verifyOwnerOrManager(match, requesterId);
         verifyVoteClosed(match);
 
@@ -60,8 +65,10 @@ public class MatchLineupService {
 
         lineupEntryRepository.deleteByMatchId(matchId);
         Long homeTeamId = match.getHomeTeam().getId();
+        Map<Long, Integer> attendanceScores = findAttendanceScores(attendVotes, homeTeamId, match.getMatchDate());
         List<ScoredMember> scoredMembers = attendVotes.stream()
-                .map(vote -> new ScoredMember(vote.getMember(), attendanceScore(vote.getMember().getId(), homeTeamId)))
+                .map(vote -> new ScoredMember(vote.getMember(),
+                        attendanceScores.getOrDefault(vote.getMember().getId(), 0)))
                 .sorted(Comparator.comparingInt(ScoredMember::score).reversed())
                 .toList();
 
@@ -93,8 +100,9 @@ public class MatchLineupService {
         return buildResponse(matchId, entries);
     }
 
-    public MatchLineupResponse getLineup(Long matchId) {
-        findMatch(matchId);
+    public MatchLineupResponse getLineup(Long matchId, Long requesterId) {
+        Match match = findExistingMatch(matchId);
+        verifyHomeTeamMember(match, requesterId);
         List<MatchLineupEntry> entries = lineupEntryRepository.findAllByMatchId(matchId);
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("라인업이 아직 생성되지 않았습니다.");
@@ -104,7 +112,7 @@ public class MatchLineupService {
 
     @Transactional
     public MatchLineupResponse saveLineup(Long matchId, SaveLineupRequest request, Long requesterId) {
-        Match match = findMatch(matchId);
+        Match match = findExistingMatch(matchId);
         verifyOwnerOrManager(match, requesterId);
         verifyVoteClosed(match);
 
@@ -116,6 +124,7 @@ public class MatchLineupService {
             throw new IllegalArgumentException("1~4쿼터 데이터가 각각 1개씩 있어야 합니다.");
         }
 
+        validateManualLineup(match, request);
         lineupEntryRepository.deleteByMatchId(matchId);
         List<MatchLineupEntry> entries = new ArrayList<>();
         for (SaveLineupRequest.QuarterEntry quarterEntry : request.getQuarters()) {
@@ -134,11 +143,51 @@ public class MatchLineupService {
         return buildResponse(matchId, entries);
     }
 
-    private int attendanceScore(Long memberId, Long homeTeamId) {
-        return matchVoteRepository.findTop8ByMemberIdAndMatchHomeTeamIdOrderByMatchMatchDateDesc(memberId, homeTeamId)
-                .stream()
-                .mapToInt(MatchVote::getScore)
-                .sum();
+    private Map<Long, Integer> findAttendanceScores(List<MatchVote> attendVotes, Long homeTeamId,
+                                                     LocalDateTime before) {
+        List<Long> memberIds = attendVotes.stream().map(vote -> vote.getMember().getId()).toList();
+        Map<Long, Integer> scores = new HashMap<>();
+        for (Object[] row : matchVoteRepository.sumRecentAttendanceScoresByMemberIds(memberIds, homeTeamId, before)) {
+            scores.put(((Number) row[0]).longValue(), ((Number) row[1]).intValue());
+        }
+        return scores;
+    }
+
+    private void validateManualLineup(Match match, SaveLineupRequest request) {
+        Long homeTeamId = match.getHomeTeam().getId();
+        Set<Long> homeTeamMemberIds = new HashSet<>(teamMemberRepository.findMemberIdsByTeamId(homeTeamId));
+        Set<Long> attendMemberIds = new HashSet<>(
+                matchVoteRepository.findMemberIdsByMatchIdAndAttendStatus(match.getId(), AttendStatus.ATTEND));
+        Map<Position, Integer> expectedPositionCounts = formationPositionCounts();
+
+        for (SaveLineupRequest.QuarterEntry quarterEntry : request.getQuarters()) {
+            Set<Long> quarterMemberIds = new HashSet<>();
+            Map<Position, Integer> positionCounts = new EnumMap<>(Position.class);
+            for (SaveLineupRequest.PlayerEntry playerEntry : quarterEntry.getPlayers()) {
+                Long memberId = playerEntry.getMemberId();
+                if (!homeTeamMemberIds.contains(memberId)) {
+                    throw new IllegalArgumentException("A lineup member must belong to the home team.");
+                }
+                if (!attendMemberIds.contains(memberId)) {
+                    throw new IllegalArgumentException("A lineup member must have an ATTEND vote.");
+                }
+                if (!quarterMemberIds.add(memberId)) {
+                    throw new IllegalArgumentException("A member cannot be assigned twice in the same quarter.");
+                }
+                positionCounts.merge(playerEntry.getPosition(), 1, Integer::sum);
+            }
+            if (!expectedPositionCounts.equals(positionCounts)) {
+                throw new IllegalArgumentException("Each quarter must use the 4-3-3 formation positions.");
+            }
+        }
+    }
+
+    private Map<Position, Integer> formationPositionCounts() {
+        Map<Position, Integer> counts = new EnumMap<>(Position.class);
+        for (Position position : FORMATION) {
+            counts.merge(position, 1, Integer::sum);
+        }
+        return counts;
     }
 
     private List<List<Integer>> assignQuarters(int attendeeCount, int threeQuarterCount) {
@@ -242,6 +291,17 @@ public class MatchLineupService {
     private Match findMatch(Long matchId) {
         return matchRepository.findById(matchId)
                 .orElseThrow(() -> new IllegalArgumentException("매치를 찾을 수 없습니다."));
+    }
+
+    private Match findExistingMatch(Long matchId) {
+        return matchRepository.findById(matchId)
+                .orElseThrow(MatchNotFoundException::new);
+    }
+
+    private void verifyHomeTeamMember(Match match, Long requesterId) {
+        if (!teamMemberRepository.existsByTeamIdAndMemberId(match.getHomeTeam().getId(), requesterId)) {
+            throw new ForbiddenException("Only home team members can view the lineup.");
+        }
     }
 
     private void verifyOwnerOrManager(Match match, Long requesterId) {

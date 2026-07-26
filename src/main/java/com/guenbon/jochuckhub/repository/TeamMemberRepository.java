@@ -24,6 +24,9 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 
     List<TeamMember> findAllByMemberId(Long memberId);
 
+    @Query("SELECT tm.member.id FROM TeamMember tm WHERE tm.team.id = :teamId")
+    List<Long> findMemberIdsByTeamId(@Param("teamId") Long teamId);
+
     @Query("""
             SELECT new com.guenbon.jochuckhub.dto.response.TeamSummaryResponse(
                 t.id, t.name, t.virtual, COUNT(allTeamMembers.id)

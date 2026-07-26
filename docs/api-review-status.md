@@ -50,6 +50,14 @@
 - 없는 매치는 `MATCH_NOT_FOUND` 404로 처리한다.
 - 투표 마감 시각부터 투표를 닫고, 투표 현황은 투표·팀원 이름 DTO 프로젝션으로 조회해 N+1을 제거한다.
 
+## MatchLineupController — 리뷰 완료 · 사용자 미검토
+
+- `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup`
+- 자동 생성과 수동 저장은 OWNER/MANAGER 및 투표 마감 조건을 검증한다.
+- 수동 저장은 선수의 홈팀 소속·ATTEND 투표 여부, 쿼터 내 선수 중복, 4-3-3 포메이션 슬롯을 검증한다.
+- 라인업 조회는 홈팀 소속을 검증하고, 엔트리와 회원을 fetch join으로 조회한다. 부포지션은 `@BatchSize(size = 20)`을 사용한다.
+- 자동 생성의 최근 8경기 점수는 현재 경기 이전의 완료된 경기만 일괄 집계한다.
+
 ## 검증
 
 - `./gradlew.bat test` 성공

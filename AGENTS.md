@@ -169,7 +169,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 | `TeamController` | 11 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `GET /api/teams/{id}/join-requests`, `PATCH /api/teams/{id}/join-requests/{requestId}`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 리뷰 완료 · 사용자 미검토 |
 | `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 리뷰 완료 · 사용자 미검토 |
 | `MatchVoteController` | 4 | `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status` | 리뷰 완료 · 사용자 미검토 |
-| `MatchLineupController` | 3 | `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup` | 리뷰 안함 |
+| `MatchLineupController` | 3 | `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup` | 리뷰 완료 · 사용자 미검토 |
 | `TestDataController` | 2 | `POST /api/test/matches/{matchId}/lineup-setup`, `DELETE /api/test/matches/{matchId}/lineup-cleanup` | 리뷰 안함 |
 
 > 현재 소스 기준 전체 엔드포인트 수는 33개이다. 이 중 테스트 API 2개를 제외하면 서비스 API는 31개이다.
@@ -229,7 +229,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 |--------|-----|------|
 | `POST` | `/api/matches/{matchId}/lineup` | OWNER/MANAGER (자동 생성, 투표 마감 후, 참석 14~20명) |
 | `PUT` | `/api/matches/{matchId}/lineup` | OWNER/MANAGER (수동 저장) |
-| `GET` | `/api/matches/{matchId}/lineup` | 인증 |
+| `GET` | `/api/matches/{matchId}/lineup` | 홈팀 멤버 |
 
 ## 주요 DTO
 
