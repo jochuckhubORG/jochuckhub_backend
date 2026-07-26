@@ -24,4 +24,14 @@ public class MatchVoteResponse {
         this.attendStatus = vote.getAttendStatus();
         this.actualStatus = vote.getActualStatus();
     }
+
+    public MatchVoteResponse(Long voteId, Long matchId, Long memberId, String memberName,
+                             AttendStatus attendStatus, ActualAttendStatus actualStatus) {
+        this.voteId = voteId;
+        this.matchId = matchId;
+        this.memberId = memberId;
+        this.memberName = memberName;
+        this.attendStatus = attendStatus;
+        this.actualStatus = actualStatus;
+    }
 }

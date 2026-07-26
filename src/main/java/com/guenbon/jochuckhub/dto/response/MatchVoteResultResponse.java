@@ -1,7 +1,6 @@
 package com.guenbon.jochuckhub.dto.response;
 
 import com.guenbon.jochuckhub.entity.AttendStatus;
-import com.guenbon.jochuckhub.entity.Member;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
@@ -25,7 +24,7 @@ public class MatchVoteResultResponse {
     private final int notVotedCount;
 
     public MatchVoteResultResponse(Long matchId, LocalDateTime voteDeadline, LocalDateTime matchDate,
-                                   List<MatchVoteResponse> allVotes, List<Member> teamMembers) {
+                                   List<MatchVoteResponse> allVotes, List<MemberNameProjection> teamMembers) {
         this.matchId = matchId;
         this.voteDeadline = voteDeadline;
         this.voteClosed = LocalDateTime.now().isAfter(voteDeadline);
@@ -42,8 +41,8 @@ public class MatchVoteResultResponse {
                 .map(MatchVoteResponse::getMemberId)
                 .collect(java.util.stream.Collectors.toSet());
         this.notVotedMembers = teamMembers.stream()
-                .filter(m -> !votedMemberIds.contains(m.getId()))
-                .map(NotVotedMemberResponse::new)
+                .filter(m -> !votedMemberIds.contains(m.getMemberId()))
+                .map(m -> new NotVotedMemberResponse(m.getMemberId(), m.getMemberName()))
                 .toList();
 
         this.attendCount = this.attendVotes.size();
@@ -56,9 +55,9 @@ public class MatchVoteResultResponse {
         private final Long memberId;
         private final String memberName;
 
-        public NotVotedMemberResponse(Member member) {
-            this.memberId = member.getId();
-            this.memberName = member.getName();
+        public NotVotedMemberResponse(Long memberId, String memberName) {
+            this.memberId = memberId;
+            this.memberName = memberName;
         }
     }
 }

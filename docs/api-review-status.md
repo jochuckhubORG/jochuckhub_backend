@@ -43,6 +43,13 @@
 - 결과 조회는 매치 존재를 먼저 확인해 없는 매치에 `MATCH_NOT_FOUND` 404를 반환하고, 골·득점자·어시스트를 fetch join으로 조회한다.
 - 경기 결과는 `@Version` 낙관적 락으로 보호한다. 프론트는 결과 조회 응답의 `version`을 결과 저장 요청에 포함하고, 충돌 시 `409 OPTIMISTIC_LOCK_CONFLICT`를 받아 새로고침 후 재시도한다.
 
+## MatchVoteController — 리뷰 완료 · 사용자 미검토
+
+- `POST /api/matches/{matchId}/votes`, `PUT /api/matches/{matchId}/votes`, `GET /api/matches/{matchId}/votes`, `PATCH /api/matches/{matchId}/votes/{memberId}/actual-status`
+- 홈팀 구성원만 투표·투표 현황을 조회하고, OWNER/MANAGER만 경기 시작 후 실제 출석 상태를 기록한다.
+- 없는 매치는 `MATCH_NOT_FOUND` 404로 처리한다.
+- 투표 마감 시각부터 투표를 닫고, 투표 현황은 투표·팀원 이름 DTO 프로젝션으로 조회해 N+1을 제거한다.
+
 ## 검증
 
 - `./gradlew.bat test` 성공

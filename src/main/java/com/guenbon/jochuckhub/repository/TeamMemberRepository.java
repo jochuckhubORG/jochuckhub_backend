@@ -2,6 +2,7 @@ package com.guenbon.jochuckhub.repository;
 
 import com.guenbon.jochuckhub.dto.response.TeamMemberStatsProjection;
 import com.guenbon.jochuckhub.dto.response.TeamSummaryResponse;
+import com.guenbon.jochuckhub.dto.response.MemberNameProjection;
 import com.guenbon.jochuckhub.entity.TeamMember;
 import com.guenbon.jochuckhub.entity.TeamRole;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -48,4 +49,13 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
             ORDER BY m.name ASC
             """)
     List<TeamMemberStatsProjection> findTeamMemberStatsByTeamId(@Param("teamId") Long teamId);
+
+    @Query("""
+            SELECT new com.guenbon.jochuckhub.dto.response.MemberNameProjection(m.id, m.name)
+            FROM TeamMember tm
+            JOIN tm.member m
+            WHERE tm.team.id = :teamId
+            ORDER BY m.name ASC
+            """)
+    List<MemberNameProjection> findMemberNamesByTeamId(@Param("teamId") Long teamId);
 }
