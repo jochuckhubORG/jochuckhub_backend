@@ -1,180 +1,192 @@
-# 조축허브 (JochukhHub) - 백엔드
+# 조축허브(JochuckHub) 백엔드
 
-조기 축구 팀 관리 풀스택 웹 애플리케이션의 백엔드 서버입니다.
+조기 축구 팀의 회원, 경기, 참석 투표, 경기 결과와 라인업을 관리하는 모바일 애플리케이션용 REST API 서버입니다.
 
 ## 기술 스택
 
-- **Java 17**
-- **Spring Boot 3.3.4**
-- **Spring Security** + JWT 인증 (JJWT 0.12.3)
-- **Spring Data JPA** + Hibernate
-- **Hibernate Envers** — 엔티티 변경 이력 감사(Audit)
-- **MySQL**
-- **Gradle**
-- **Swagger (SpringDoc OpenAPI 2.5.0)**
-- **Resilience4j** — 서킷브레이커
-- **Spring Actuator** / **Spring AOP**
+- Java 17
+- Spring Boot 3.3.4
+- Spring Security + JWT(Bearer 인증)
+- Spring Data JPA, Querydsl, Hibernate Envers
+- MySQL
+- Gradle
+- SpringDoc OpenAPI(Swagger)
+- Resilience4j, Spring Actuator, Spring AOP
 
-## 프로젝트 구조
+## 주요 기능
 
-```
-src/main/java/com/guenbon/jochuckhub/
-├── config/
-│   ├── SecurityConfig.java              # Spring Security 설정 (JWT, Stateless)
-│   └── jwt/
-│       ├── JwtTokenProvider.java        # JWT 토큰 생성/검증
-│       ├── JwtAuthenticationFilter.java # 요청마다 JWT 파싱 필터
-│       └── JwtAuthenticationEntryPoint.java
-├── controller/
-│   ├── AuthController.java              # POST /api/auth/login
-│   ├── MemberController.java            # /api/members
-│   ├── TeamController.java              # /api/teams
-│   ├── MatchController.java             # /api/matches
-│   └── MatchVoteController.java         # /api/matches/{matchId}/votes
-├── dto/
-│   ├── CustomUserDetails.java           # Spring Security UserDetails 구현체
-│   ├── request/
-│   │   ├── LoginRequest.java
-│   │   ├── SignUpRequest.java
-│   │   ├── UpdateMemberRequest.java
-│   │   ├── CreateTeamRequest.java
-│   │   ├── UpdateTeamRequest.java
-│   │   ├── CreateVirtualTeamRequest.java
-│   │   ├── CreateMatchRequest.java
-│   │   ├── MatchVoteRequest.java
-│   │   ├── RecordMatchResultRequest.java
-│   │   ├── UpdateActualStatusRequest.java
-│   │   └── GoalRequest.java
-│   └── response/
-│       ├── LoginResponse.java           # accessToken, tokenType
-│       ├── MemberResponse.java
-│       ├── TeamSummaryResponse.java     # virtual 필드 포함
-│       ├── TeamDetailResponse.java      # owner, managers 포함
-│       ├── MatchResponse.java
-│       ├── MatchResultResponse.java
-│       ├── MatchVoteResponse.java
-│       ├── MatchVoteResultResponse.java
-│       ├── GoalResponse.java
-│       └── ErrorResponse.java
-├── entity/
-│   ├── Member.java                      # 회원 엔티티 (@Audited)
-│   ├── Position.java                    # 축구 포지션 enum
-│   ├── Role.java                        # 시스템 역할 enum
-│   ├── Team.java                        # 팀 엔티티 (virtual 플래그 포함)
-│   ├── TeamMember.java                  # 팀-회원 중간 테이블
-│   ├── TeamRole.java                    # OWNER / MANAGER / PLAYER
-│   ├── Match.java                       # 매치 엔티티 (match_record 테이블)
-│   ├── MatchVote.java                   # 경기 참석 투표
-│   ├── AttendStatus.java                # ATTEND / ABSENT
-│   ├── ActualAttendStatus.java          # LATE / NO_SHOW
-│   └── Goal.java                        # 골 기록
-├── exception/
-│   ├── errorcode/ErrorCode.java
-│   ├── GlobalExceptionHandler.java
-│   ├── MemberNotFoundException.java
-│   ├── TeamNotFoundException.java
-│   └── ForbiddenException.java
-├── repository/
-│   ├── MemberRepository.java
-│   ├── TeamRepository.java
-│   ├── TeamMemberRepository.java
-│   ├── MatchRepository.java
-│   ├── MatchVoteRepository.java
-│   └── GoalRepository.java
-└── service/
-    ├── CustomUserDetailsService.java    # UserDetailsService 구현체
-    ├── MemberService.java               # 회원 조회, 회원가입, 수정, 참여 점수
-    ├── TeamService.java                 # 팀 CRUD, 가상팀 생성, 팀 검색
-    ├── MatchService.java                # 매치 CRUD
-    ├── MatchVoteService.java            # 매치 투표, 실제 출석 상태 관리
-    └── MatchResultService.java          # 경기 결과 입력/조회
-```
-
-## 도메인 모델
-
-| 엔티티 | 설명 |
-|--------|------|
-| `Member` | 사용자. `mainPosition`(1개) + `subPositions`(최대 3개, 중복 불가). `@Audited`로 변경 이력 관리 |
-| `Team` | 실제 팀 또는 가상 팀(`virtual=true`). 가상 팀은 서비스 미가입 외부 팀을 나타내며 생성한 팀에게만 노출 |
-| `TeamMember` | 팀-회원 관계. `TeamRole` = `OWNER` / `MANAGER` / `PLAYER` |
-| `Match` | 경기 기록(`match_record` 테이블). homeTeam(실제) + opponentTeam(실제 또는 가상) |
-| `MatchVote` | 경기 참석 투표. `AttendStatus`(ATTEND/ABSENT) + `ActualAttendStatus`(LATE/NO_SHOW) |
-| `Goal` | 골 기록. 홈팀 골(scorer, assister) 또는 상대팀 골(`opponentGoal=true`) |
-| `MatchLineupEntry` | 쿼터별 포지션 배정 기록. 4-3-3 포메이션 기반 자동 생성 |
-
-### Position enum
-
-| 포지션군 | 값 |
-|---------|---|
-| 골키퍼 | `GK` |
-| 수비수 | `CB`, `LB`, `RB`, `LWB`, `RWB` |
-| 미드필더 | `CDM`, `CM` |
-| 공격수 | `LW`, `RW`, `ST` |
-
-### 참여 점수 기준 (최근 8경기)
-
-| 상태 | 점수 |
-|------|------|
-| ATTEND (정상 참석) | 2점 |
-| LATE (지각) | 1점 |
-| ABSENT (불참 투표) | 0점 |
-| NO_SHOW (무단불참) | -1점 |
-
-## API 엔드포인트
-
-### 인증
-| 메서드 | 경로 | 설명 | 인증 |
-|--------|------|------|------|
-| POST | `/api/auth/login` | 로그인 → JWT 토큰 발급 | 불필요 |
-
-### 회원
-| 메서드 | 경로 | 설명 | 인증 |
-|--------|------|------|------|
-| POST | `/api/members/signup` | 회원가입 | 불필요 |
-| GET | `/api/members` | 전체 회원 목록 | 필요 |
-| GET | `/api/members/{id}` | 회원 상세 | 필요 |
-| PUT | `/api/members/{id}` | 회원 정보 수정 (본인만) | 필요 |
-| GET | `/api/members/{id}/attendance-score?teamId=xxx` | 참여 점수 조회 (최근 8경기) | 필요 |
-
-### 팀
-| 메서드 | 경로 | 설명 | 인증 |
-|--------|------|------|------|
-| POST | `/api/teams` | 실제 팀 생성 (생성자 → OWNER) | 필요 |
-| GET | `/api/teams` | 전체 팀 목록 | 필요 |
-| GET | `/api/teams/{id}` | 팀 상세 | 필요 |
-| PUT | `/api/teams/{id}` | 팀 이름 수정 | OWNER |
-| DELETE | `/api/teams/{id}` | 팀 삭제 | OWNER |
-| GET | `/api/teams/search?name=xxx&myTeamId=yyy` | 팀 이름 검색 | 필요 |
-| POST | `/api/teams/virtual` | 가상 팀 생성 | OWNER/MANAGER |
-
-### 매치
-| 메서드 | 경로 | 설명 | 인증 |
-|--------|------|------|------|
-| POST | `/api/matches` | 매치 생성 | OWNER/MANAGER |
-| GET | `/api/matches?teamId=xxx` | 팀의 매치 목록 | 필요 |
-| GET | `/api/matches/{id}` | 매치 상세 | 필요 |
-| PUT | `/api/matches/{id}/result` | 경기 결과 입력/수정 | OWNER/MANAGER |
-| GET | `/api/matches/{id}/result` | 경기 결과 조회 | 필요 |
-
-### 매치 투표
-| 메서드 | 경로 | 설명 | 인증 |
-|--------|------|------|------|
-| POST | `/api/matches/{matchId}/votes` | 참석 여부 투표 | 홈팀 멤버 |
-| PUT | `/api/matches/{matchId}/votes` | 투표 수정 | 홈팀 멤버 |
-| GET | `/api/matches/{matchId}/votes` | 투표 결과 조회 | 홈팀 멤버 |
-| PATCH | `/api/matches/{matchId}/votes/{memberId}/actual-status` | 실제 출석 상태 표시 (지각/무단불참) | OWNER/MANAGER |
-
-### 매치 라인업
-| 메서드 | 경로 | 설명 | 인증 |
-|--------|------|------|------|
-| POST | `/api/matches/{matchId}/lineup` | 라인업 자동 생성 (출석율+헝가리안 알고리즘, 14~20명) | OWNER/MANAGER |
-| PUT | `/api/matches/{matchId}/lineup` | 라인업 저장 (수동 생성 또는 자동 생성 후 수정) | OWNER/MANAGER |
-| GET | `/api/matches/{matchId}/lineup` | 라인업 조회 | 필요 |
-
-> Swagger UI: 서버 실행 후 `http://localhost:8080/swagger-ui/index.html`
+- Kakao SDK access token을 이용한 모바일 로그인
+- 회전 가능한 refresh token과 짧은 수명의 JWT access token 발급
+- 실제 팀 및 외부 상대를 위한 가상 팀 관리
+- 팀 가입 요청과 `OWNER` / `MANAGER` / `PLAYER` 권한 관리
+- 경기 생성, 참석 투표, 실제 출석 상태 및 참여 점수 관리
+- 득점·도움·상대 팀 골과 경기 결과 기록
+- 참석자 14~20명을 대상으로 한 4-3-3 라인업 자동 생성
+- Hibernate Envers 기반 주요 엔티티 변경 이력 기록
 
 ## 인증 흐름
 
-1. `POST /api/auth/login` → JWT 토큰 반환 (`{ accessToken, tokenType: "Bearer" }`)
-2. 이후 모든 요청: `Authorization: Bearer <token>` 헤더 첨부
-3. `JwtAuthenticationFilter`가 매 요청마다 토큰 검증 (만료: 24시간)
+이 서버는 웹 브라우저의 인증 쿠키나 OAuth 콜백을 사용하지 않습니다. Flutter 등 모바일 앱이 Kakao SDK로 로그인한 후 카카오 access token을 백엔드에 전달합니다.
+
+```text
+모바일 앱에서 Kakao SDK 로그인
+        ↓
+카카오 access token 획득
+        ↓
+POST /api/auth/kakao
+        ↓
+조축허브 access token + refresh token 발급
+        ↓
+Authorization: Bearer {accessToken}
+```
+
+### 카카오 로그인
+
+```http
+POST /api/auth/kakao
+Content-Type: application/json
+
+{
+  "kakaoAccessToken": "KAKAO_ACCESS_TOKEN"
+}
+```
+
+응답 예시:
+
+```json
+{
+  "accessToken": "SERVICE_ACCESS_TOKEN",
+  "refreshToken": "SERVICE_REFRESH_TOKEN",
+  "tokenType": "Bearer",
+  "memberId": 1,
+  "newMember": false
+}
+```
+
+서버는 카카오 access token으로 카카오 사용자 정보 API를 호출해 사용자를 검증합니다. 이후 API에는 카카오 토큰이 아니라 서버가 발급한 조축허브 access token을 사용합니다.
+
+### 인증 API 호출
+
+```http
+GET /api/members/me
+Authorization: Bearer SERVICE_ACCESS_TOKEN
+```
+
+모바일 앱은 서비스 토큰을 iOS Keychain 또는 Android Keystore와 같은 OS 보안 저장소에 보관해야 합니다.
+
+### 토큰 갱신
+
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "SERVICE_REFRESH_TOKEN"
+}
+```
+
+갱신에 성공하면 기존 refresh token은 폐기되고 새로운 access/refresh token 쌍이 반환됩니다.
+
+### 로그아웃
+
+```http
+POST /api/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "SERVICE_REFRESH_TOKEN"
+}
+```
+
+로그아웃은 서버에 저장된 refresh token을 폐기합니다. 모바일 앱도 로컬 보안 저장소의 토큰을 함께 삭제해야 합니다.
+
+## 로컬 실행
+
+### 요구사항
+
+- JDK 17
+- MySQL 8
+- 데이터베이스 `jochuckhub`
+
+### 비밀 설정
+
+Git에 포함되지 않는 `src/main/resources/application-private.properties`를 생성합니다.
+
+```properties
+spring.datasource.password=<mysql_password>
+jwt.secret=<base64_encoded_secret_at_least_256_bits>
+```
+
+Kakao SDK 초기화에 사용하는 네이티브 앱 키와 Android/iOS 플랫폼 설정은 모바일 프로젝트 및 Kakao Developers에서 관리합니다. 백엔드는 Kakao SDK가 발급한 access token만 전달받으므로 카카오 Client Secret을 저장하지 않습니다.
+
+### 실행 및 테스트
+
+Windows:
+
+```powershell
+.\gradlew.bat bootRun
+.\gradlew.bat test
+```
+
+macOS/Linux:
+
+```bash
+./gradlew bootRun
+./gradlew test
+```
+
+서버 기본 주소는 `http://localhost:8080`입니다.
+
+## API 문서
+
+서버 실행 후 Swagger UI에서 전체 요청·응답 명세를 확인할 수 있습니다.
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+대표 API:
+
+| 영역 | 메서드 | 경로 | 권한 |
+|---|---|---|---|
+| 인증 | POST | `/api/auth/kakao` | 공개 |
+| 인증 | POST | `/api/auth/refresh` | 공개 |
+| 인증 | POST | `/api/auth/logout` | 공개 |
+| 회원 | GET | `/api/members/me` | 인증 |
+| 회원 | PUT | `/api/members/{id}` | 본인 |
+| 팀 | POST | `/api/teams` | 인증 |
+| 팀 | GET | `/api/teams` | 인증 |
+| 팀 | POST | `/api/teams/{id}/join` | 인증 |
+| 팀 | POST | `/api/teams/virtual` | OWNER/MANAGER |
+| 경기 | POST | `/api/matches` | OWNER/MANAGER |
+| 경기 | GET | `/api/matches?teamId={teamId}` | 팀원 |
+| 결과 | PUT | `/api/matches/{id}/result` | OWNER/MANAGER |
+| 투표 | POST | `/api/matches/{matchId}/votes` | 홈팀 팀원 |
+| 라인업 | POST | `/api/matches/{matchId}/lineup` | OWNER/MANAGER |
+
+세부 엔드포인트와 도메인 규칙은 [AGENTS.md](AGENTS.md), 컨트롤러별 리뷰 이력은 [docs/api-review-status.md](docs/api-review-status.md)를 참고하세요.
+
+## 주요 도메인 규칙
+
+- access token 유효기간: 15분
+- refresh token 유효기간: 14일, 갱신 시 회전
+- 실제 팀 이름은 전체에서 고유하며 가상 팀 이름은 생성 팀 내에서 고유
+- 팀 삭제는 경기 기록을 보존하는 비활성화 방식
+- 경기는 현재 시각 기준 최소 2시간 이후부터 생성 가능
+- 경기 결과 저장은 `@Version` 기반 낙관적 락 사용
+- 참석 투표 점수: 정상 참석 2점, 지각 1점, 불참 0점, 무단불참 -1점
+- 라인업 자동 생성 참석 인원: 14~20명
+- 지원 포지션: `GK`, `CB`, `LB`, `RB`, `CDM`, `CM`, `LW`, `RW`, `ST`
+
+## 프로젝트 구조
+
+```text
+src/main/java/com/guenbon/jochuckhub/
+├── config/       # Security, JWT, JPA, 로깅 설정
+├── controller/   # REST API 컨트롤러
+├── dto/          # 요청 및 응답 DTO
+├── entity/       # JPA 엔티티와 enum
+├── exception/    # 전역 예외 처리와 도메인 예외
+├── repository/   # Spring Data JPA 및 Querydsl 저장소
+└── service/      # 인증과 도메인 비즈니스 로직
+```
