@@ -67,6 +67,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("INVALID_REFRESH_TOKEN", e.getMessage()));
     }
 
+    @ExceptionHandler(KakaoAuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleKakaoAuthentication(KakaoAuthenticationException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse("KAKAO_AUTHENTICATION_FAILED", e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.badRequest()

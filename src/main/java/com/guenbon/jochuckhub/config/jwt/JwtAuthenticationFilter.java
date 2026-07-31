@@ -9,7 +9,6 @@ import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +22,8 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
     private final SecurityEventLogger securityEventLogger;
@@ -31,7 +32,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String token = resolveToken(request);
-
         if (StringUtils.hasText(token)) {
             try {
                 String username = jwtTokenProvider.validateAndGetUsername(token);
@@ -43,42 +43,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 securityEventLogger.jwtAuthenticationSucceeded(
                         username, request.getMethod(), request.getRequestURI());
             } catch (ExpiredJwtException e) {
-                SecurityContextHolder.clearContext();
-                logFailure("expired", request);
+                authenticationFailed("expired", request);
             } catch (SignatureException e) {
-                SecurityContextHolder.clearContext();
-                logFailure("invalid_signature", request);
+                authenticationFailed("invalid_signature", request);
             } catch (MalformedJwtException e) {
-                SecurityContextHolder.clearContext();
-                logFailure("malformed", request);
+                authenticationFailed("malformed", request);
             } catch (UnsupportedJwtException e) {
-                SecurityContextHolder.clearContext();
-                logFailure("unsupported", request);
+                authenticationFailed("unsupported", request);
             } catch (IllegalArgumentException e) {
-                SecurityContextHolder.clearContext();
-                logFailure("invalid", request);
+                authenticationFailed("invalid", request);
             } catch (Exception e) {
-                SecurityContextHolder.clearContext();
-                logFailure("authentication_error", request);
+                authenticationFailed("authentication_error", request);
             }
         }
-
         filterChain.doFilter(request, response);
     }
 
     private String resolveToken(HttpServletRequest request) {
-        // HttpOnly 쿠키에서 accessToken 추출 (카카오 로그인 흐름)
-        if (request.getCookies() != null) {
-            for (Cookie cookie : request.getCookies()) {
-                if ("accessToken".equals(cookie.getName())) {
-                    return cookie.getValue();
-                }
-            }
+        String authorization = request.getHeader("Authorization");
+        if (!StringUtils.hasText(authorization) || !authorization.startsWith(BEARER_PREFIX)) {
+            return null;
         }
-        return null;
+        String token = authorization.substring(BEARER_PREFIX.length()).trim();
+        return StringUtils.hasText(token) ? token : null;
     }
 
-    private void logFailure(String reason, HttpServletRequest request) {
+    private void authenticationFailed(String reason, HttpServletRequest request) {
+        SecurityContextHolder.clearContext();
         securityEventLogger.jwtAuthenticationFailed(reason, request.getMethod(), request.getRequestURI());
     }
 }

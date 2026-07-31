@@ -24,23 +24,7 @@ spring.datasource.password=<mysql_password>
 # JWT 서명 키 (256비트 이상 Base64 인코딩)
 jwt.secret=<jwt_secret>
 
-# 카카오 OAuth2
-kakao.client-id=<kakao_rest_api_key>
-kakao.client-secret=<kakao_client_secret>
 ```
-
-카카오 클라이언트 ID/Secret은 [카카오 개발자 콘솔](https://developers.kakao.com)에서 발급받는다.
-
-`kakao.redirect-uri`(콜백 URL)는 콘솔의 "Redirect URI" 항목에 동일하게 등록해야 한다.
-
-## 로컬 테스트 페이지
-
-`src/main/resources/static/test-login.html` — 앱 실행 후 `http://localhost:8080/test-login.html`에서 접근 가능.
-
-- 카카오 로그인 버튼 → `/api/auth/kakao` 리다이렉트 → 카카오 인증 → `/api/auth/kakao/callback` → 이 페이지로 복귀
-- 로그인 성공 시 짧은 수명의 JWT가 `accessToken` HttpOnly 쿠키로, 리프레시 토큰이 `refreshToken` HttpOnly 쿠키로 저장됨
-- 회원 목록·팀 목록 조회, 팀 생성 등 기본 API를 브라우저에서 직접 테스트할 수 있음
-- 같은 Origin(`localhost:8080`)이므로 CORS 설정 없이 동작
 
 ## 패키지 구조
 
@@ -48,7 +32,7 @@ kakao.client-secret=<kakao_client_secret>
 src/main/java/com/guenbon/jochuckhub/
 ├── config/
 │   ├── JpaConfig.java         # JPAQueryFactory 빈 등록
-│   ├── SecurityConfig.java    # Spring Security, CSRF, CORS 설정
+│   ├── SecurityConfig.java    # Spring Security, Bearer JWT, CORS 설정
 │   └── jwt/                   # JwtTokenProvider, JwtAuthenticationFilter, JwtAuthenticationEntryPoint
 ├── controller/        # AuthController, MemberController, TeamController, MatchController
 │                      # MatchVoteController, MatchLineupController
@@ -66,30 +50,29 @@ src/main/java/com/guenbon/jochuckhub/
 
 ## 인증 흐름
 
-1. 프론트엔드가 `GET /api/auth/kakao`로 사용자를 리다이렉트. 서버는 256비트 난수 `state`를 HttpOnly 쿠키(5분)와 카카오 인가 요청에 함께 설정한다.
-2. 사용자가 카카오 로그인 → 카카오가 `GET /api/auth/kakao/callback?code=xxx&state=xxx`로 리다이렉트. 서버는 콜백 `state`와 쿠키 값을 검증한 뒤 쿠키를 제거한다.
-3. 서버: 인가코드 → 카카오 액세스 토큰 → 카카오 사용자 정보 → Member 조회/생성 → JWT 발급
-4. 짧은 수명의 JWT를 `accessToken` HttpOnly 쿠키로, 회전 가능한 불투명 토큰을 `refreshToken` HttpOnly 쿠키(`/api/auth` 경로)로 Set-Cookie → `kakao.frontend-redirect-uri`로 리다이렉트
-   - 신규 가입이면 `?newMember=true` 파라미터 포함
-5. 이후 모든 요청: 브라우저가 쿠키를 자동 포함 (`credentials: include`)
-   - `JwtAuthenticationFilter`에서 쿠키의 `accessToken`을 추출해 인증 처리
-   - 액세스 토큰 만료 시 `POST /api/auth/refresh`가 refresh token을 회전하고 새 쿠키를 발급
+1. 모바일 앱이 Kakao SDK로 로그인해 카카오 access token을 발급받는다.
+2. 앱이 `POST /api/auth/kakao` 요청 본문에 카카오 access token을 전송한다.
+3. 서버가 카카오 사용자 정보 API로 토큰을 검증하고 Member 조회/생성 후 서비스 access/refresh token을 JSON으로 반환한다.
+4. 앱은 토큰을 OS 보안 저장소(Keychain/Keystore)에 저장한다.
+5. 이후 인증 요청은 `Authorization: Bearer {accessToken}` 헤더를 사용한다.
+   - `JwtAuthenticationFilter`에서 Bearer access token을 추출해 인증 처리한다.
+   - access token 만료 시 `POST /api/auth/refresh` 본문으로 refresh token을 보내 회전된 토큰 쌍을 받는다.
 
-공개 엔드포인트: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/test-login.html`
+공개 엔드포인트: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`
 
 ## Spring Security 구성
 
-**세션**: `STATELESS` — 서버 측 세션 없음, JWT 쿠키로만 인증 유지
+**세션**: `STATELESS` — 서버 측 세션 없음, Authorization Bearer JWT로만 인증 유지
 
-**CSRF**: 활성화 — `XSRF-TOKEN` 쿠키와 요청 헤더 토큰을 비교한다. 상태 변경 요청(POST, PUT, PATCH, DELETE)에는 CSRF 토큰이 필요하다.
+**CSRF**: 비활성화 — 인증 정보를 쿠키가 아닌 Authorization 헤더로 명시적으로 전달하는 모바일 API이다.
 
 **CORS**: `application.properties`의 `cors.allowed-origins` 값으로 허용 Origin 지정
-- `credentials: true` (쿠키 전송 허용)
-- `Set-Cookie` 헤더 노출 (`exposedHeaders`)
+- `credentials: false` (인증 쿠키를 사용하지 않음)
+- 허용 헤더: `Authorization`, `Content-Type`
 - 허용 메서드: `GET, POST, PUT, PATCH, DELETE, OPTIONS`
 
 **필터 체인 순서**
-1. `JwtAuthenticationFilter` (커스텀) — `accessToken` 쿠키에서 JWT 추출 → 검증 → `SecurityContextHolder` 설정
+1. `JwtAuthenticationFilter` (커스텀) — Authorization Bearer 헤더에서 JWT 추출 → 검증 → `SecurityContextHolder` 설정
 2. `UsernamePasswordAuthenticationFilter` (Spring 기본, 실질적으로 비활성)
 
 **인증 실패 처리**: `JwtAuthenticationEntryPoint` — 토큰 없거나 유효하지 않으면 401 반환
@@ -165,7 +148,7 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 
 | 컨트롤러 | API 수 | API | 리뷰 현황 |
 |---|---:|---|---|
-| `AuthController` | 4 | `GET /api/auth/kakao`, `GET /api/auth/kakao/callback`, `POST /api/auth/refresh`, `POST /api/auth/logout` | 사용자 검토 완료 |
+| `AuthController` | 3 | `POST /api/auth/kakao`, `POST /api/auth/refresh`, `POST /api/auth/logout` | 리뷰 완료 · 사용자 미검토 |
 | `MemberController` | 6 | `GET /api/members?page=0`, `GET /api/members/me`, `GET /api/members/{id}`, `PUT /api/members/{id}`, `GET /api/members/{id}/attendance-score`, `GET /api/members/{id}/goal-records?page=0` | 사용자 검토 완료 |
 | `TeamController` | 11 | `POST /api/teams`, `GET /api/teams`, `GET /api/teams/search`, `POST /api/teams/virtual`, `GET /api/teams/{id}`, `POST /api/teams/{id}/join`, `GET /api/teams/{id}/join-requests`, `PATCH /api/teams/{id}/join-requests/{requestId}`, `PUT /api/teams/{id}`, `GET /api/teams/{id}/members`, `DELETE /api/teams/{id}` | 사용자 검토 완료 |
 | `MatchController` | 5 | `POST /api/matches`, `GET /api/matches`, `GET /api/matches/{id}`, `PUT /api/matches/{id}/result`, `GET /api/matches/{id}/result` | 사용자 검토 완료 |
@@ -173,17 +156,16 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 | `MatchLineupController` | 3 | `POST /api/matches/{matchId}/lineup`, `PUT /api/matches/{matchId}/lineup`, `GET /api/matches/{matchId}/lineup` | 사용자 검토 완료 |
 | `TestDataController` | 2 | `POST /api/test/matches/{matchId}/lineup-setup`, `DELETE /api/test/matches/{matchId}/lineup-cleanup` | 리뷰 안함 |
 
-> 현재 소스 기준 전체 엔드포인트 수는 35개이다. 이 중 테스트 API 2개를 제외하면 서비스 API는 33개이다.
+> 현재 소스 기준 전체 엔드포인트 수는 34개이다. 이 중 테스트 API 2개를 제외하면 서비스 API는 32개이다.
 >
 > 2026-07-26 최종 교차 리뷰는 `TestDataController`를 제외한 6개 서비스 컨트롤러를 대상으로 완료했다. 사용자 요청에 따른 코드 수정과 사용자 최종 확인이 모두 반영되었다.
 
 ### 인증
 | 메서드 | URL | 권한 |
 |--------|-----|------|
-| `GET` | `/api/auth/kakao` | 공개 (카카오 로그인 페이지로 리다이렉트) |
-| `GET` | `/api/auth/kakao/callback?code=xxx` | 공개 (카카오 콜백 → JWT 쿠키 발급) |
-| `POST` | `/api/auth/refresh` | 공개 (CSRF 토큰 필요, refresh token 회전 → 새 인증 쿠키 발급) |
-| `POST` | `/api/auth/logout` | 공개 (CSRF 토큰 필요, refresh token 폐기 및 인증 쿠키 삭제) |
+| `POST` | `/api/auth/kakao` | 공개 (`{ "kakaoAccessToken": "..." }` → 서비스 토큰 쌍 발급) |
+| `POST` | `/api/auth/refresh` | 공개 (`{ "refreshToken": "..." }` → refresh token 회전 및 새 토큰 쌍 발급) |
+| `POST` | `/api/auth/logout` | 공개 (`{ "refreshToken": "..." }` → refresh token 폐기) |
 
 ### 회원
 | 메서드 | URL | 권한 |
@@ -248,9 +230,12 @@ API 리뷰는 컨트롤러 단위로 진행한다. 각 API는 아래 세 상태 
 - `RecordMatchResultRequest`: version, goals[], lateMemberIds[], noShowMemberIds[]
 - `GoalRequest`: opponentGoal, scorerMemberId, assisterMemberId
 - `SaveLineupRequest`: quarters[{quarter, players[{memberId, position}]}]
+- `KakaoLoginRequest`: kakaoAccessToken
+- `RefreshTokenRequest`: refreshToken
 
 **응답 DTO**
 - `LoginResponse`: accessToken, refreshToken, tokenType, memberId, isNewMember
+- `TokenResponse`: accessToken, refreshToken, tokenType
 - `MemberResponse`: id, name, mainPosition, subPositions
 - `PageResponse<T>`: content, page, size, totalElements, totalPages, first, last
 - `TeamSummaryResponse`: id, name, virtual, memberCount
@@ -275,6 +260,7 @@ IllegalArgumentException         → 400  BAD_REQUEST
 DataIntegrityViolationException  → 409  DATA_INTEGRITY_VIOLATION
 OptimisticLockingFailureException → 409 OPTIMISTIC_LOCK_CONFLICT
 InvalidRefreshTokenException       → 401 INVALID_REFRESH_TOKEN
+KakaoAuthenticationException      → 401 KAKAO_AUTHENTICATION_FAILED
 Exception (기타)                  → 500  INTERNAL_SERVER_ERROR
 ```
 응답 형식: `{ "code": "...", "message": "..." }`

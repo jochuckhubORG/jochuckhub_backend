@@ -8,13 +8,9 @@ import com.guenbon.jochuckhub.entity.Position;
 import com.guenbon.jochuckhub.exception.KakaoAuthenticationException;
 import com.guenbon.jochuckhub.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -26,7 +22,6 @@ import java.util.Collections;
 public class KakaoAuthService {
 
     private static final String PROVIDER = "kakao";
-    private static final String TOKEN_URL = "https://kauth.kakao.com/oauth/token";
     private static final String USER_INFO_URL = "https://kapi.kakao.com/v2/user/me";
 
     private final MemberRepository memberRepository;
@@ -34,20 +29,9 @@ public class KakaoAuthService {
     private final ExternalApiLogger externalApiLogger;
     private final RestClient restClient = RestClient.create();
 
-    @Value("${kakao.client-id}")
-    private String clientId;
-
-    @Value("${kakao.client-secret}")
-    private String clientSecret;
-
-    @Value("${kakao.redirect-uri}")
-    private String kakaoRedirectUri;
-
     @Transactional
-    public LoginResponse kakaoLogin(String code) {
-        String kakaoAccessToken = getKakaoAccessToken(code);
+    public LoginResponse kakaoLogin(String kakaoAccessToken) {
         KakaoUserInfo userInfo = getKakaoUserInfo(kakaoAccessToken);
-
         if (userInfo.id() == null) {
             throw new KakaoAuthenticationException("invalid_user_info", "카카오 사용자 식별자가 없습니다.");
         }
@@ -55,6 +39,7 @@ public class KakaoAuthService {
         String kakaoId = String.valueOf(userInfo.id());
         String nickname = userInfo.kakaoAccount() != null
                 && userInfo.kakaoAccount().profile() != null
+                && userInfo.kakaoAccount().profile().nickname() != null
                 ? userInfo.kakaoAccount().profile().nickname()
                 : "사용자";
 
@@ -71,42 +56,8 @@ public class KakaoAuthService {
                 });
 
         RefreshTokenService.TokenPair tokenPair = refreshTokenService.issue(member);
-        return new LoginResponse(tokenPair.accessToken(), tokenPair.refreshToken(), member.getId(), isNewMemberRef[0]);
-    }
-
-    private String getKakaoAccessToken(String code) {
-        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-        params.add("grant_type", "authorization_code");
-        params.add("client_id", clientId);
-        params.add("client_secret", clientSecret);
-        params.add("redirect_uri", kakaoRedirectUri);
-        params.add("code", code);
-
-        long startedAt = System.nanoTime();
-        externalApiLogger.requested(PROVIDER, "token_exchange");
-        try {
-            ResponseEntity<KakaoTokenResponse> response = restClient.post()
-                    .uri(TOKEN_URL)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(params)
-                    .retrieve()
-                    .toEntity(KakaoTokenResponse.class);
-            externalApiLogger.succeeded(PROVIDER, "token_exchange", response.getStatusCode().value(), elapsedMillis(startedAt));
-
-            KakaoTokenResponse body = response.getBody();
-            if (body == null || body.accessToken() == null || body.accessToken().isBlank()) {
-                externalApiLogger.failed(PROVIDER, "token_exchange", response.getStatusCode().value(), "invalid_response", elapsedMillis(startedAt));
-                throw new KakaoAuthenticationException("invalid_token_response", "카카오 토큰 응답이 올바르지 않습니다.");
-            }
-            return body.accessToken();
-        } catch (RestClientResponseException e) {
-            String reason = classifyHttpFailure(e.getStatusCode().value());
-            externalApiLogger.failed(PROVIDER, "token_exchange", e.getStatusCode().value(), reason, elapsedMillis(startedAt));
-            throw new KakaoAuthenticationException(reason, "카카오 토큰 발급에 실패했습니다.", e);
-        } catch (RestClientException e) {
-            externalApiLogger.failed(PROVIDER, "token_exchange", null, "network_error", elapsedMillis(startedAt));
-            throw new KakaoAuthenticationException("network_error", "카카오 인증 서버에 연결할 수 없습니다.", e);
-        }
+        return new LoginResponse(
+                tokenPair.accessToken(), tokenPair.refreshToken(), member.getId(), isNewMemberRef[0]);
     }
 
     private KakaoUserInfo getKakaoUserInfo(String kakaoAccessToken) {
@@ -118,27 +69,33 @@ public class KakaoAuthService {
                     .header("Authorization", "Bearer " + kakaoAccessToken)
                     .retrieve()
                     .toEntity(KakaoUserInfo.class);
-            externalApiLogger.succeeded(PROVIDER, "user_info", response.getStatusCode().value(), elapsedMillis(startedAt));
+            externalApiLogger.succeeded(
+                    PROVIDER, "user_info", response.getStatusCode().value(), elapsedMillis(startedAt));
 
             KakaoUserInfo body = response.getBody();
             if (body == null) {
-                externalApiLogger.failed(PROVIDER, "user_info", response.getStatusCode().value(), "invalid_response", elapsedMillis(startedAt));
-                throw new KakaoAuthenticationException("invalid_user_info", "카카오 사용자 정보를 받을 수 없습니다.");
+                externalApiLogger.failed(
+                        PROVIDER, "user_info", response.getStatusCode().value(),
+                        "invalid_response", elapsedMillis(startedAt));
+                throw new KakaoAuthenticationException(
+                        "invalid_user_info", "카카오 사용자 정보를 받을 수 없습니다.");
             }
             return body;
         } catch (RestClientResponseException e) {
             String reason = classifyHttpFailure(e.getStatusCode().value());
-            externalApiLogger.failed(PROVIDER, "user_info", e.getStatusCode().value(), reason, elapsedMillis(startedAt));
+            externalApiLogger.failed(
+                    PROVIDER, "user_info", e.getStatusCode().value(), reason, elapsedMillis(startedAt));
             throw new KakaoAuthenticationException(reason, "카카오 사용자 정보 조회에 실패했습니다.", e);
         } catch (RestClientException e) {
-            externalApiLogger.failed(PROVIDER, "user_info", null, "network_error", elapsedMillis(startedAt));
-            throw new KakaoAuthenticationException("network_error", "카카오 인증 서버에 연결할 수 없습니다.", e);
+            externalApiLogger.failed(
+                    PROVIDER, "user_info", null, "network_error", elapsedMillis(startedAt));
+            throw new KakaoAuthenticationException(
+                    "network_error", "카카오 인증 서버에 연결할 수 없습니다.", e);
         }
     }
 
     private String classifyHttpFailure(int status) {
-        if (status == 400) return "invalid_authorization_code";
-        if (status == 401 || status == 403) return "client_configuration_error";
+        if (status == 401 || status == 403) return "invalid_kakao_access_token";
         if (status == 429) return "rate_limited";
         if (status >= 500) return "provider_unavailable";
         return "provider_error";
@@ -147,8 +104,6 @@ public class KakaoAuthService {
     private long elapsedMillis(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
     }
-
-    private record KakaoTokenResponse(@JsonProperty("access_token") String accessToken) {}
 
     private record KakaoUserInfo(Long id, @JsonProperty("kakao_account") KakaoAccount kakaoAccount) {}
 
